@@ -1,0 +1,42 @@
+---
+
+- name: Test playbook
+  gather_facts: false
+  hosts: test
+
+  tasks:
+    - name: Check certs
+      file:
+        path: /var/lib/pkgtools/packages/ca-certificates-20240703-noarch-1 
+        state: file 
+        modification_time: preserve 
+        access_time: preserve
+    - name: Display the config
+      debug:
+        msg: "This is a test"
+   
+    - name: Package installed test
+      stat:
+        path: /var/lib/pkgtools/packages/containerd-1.7.16-x86_64-1
+      register: package_result
+
+    - name: Show pkg var
+      debug:
+        msg: "{{ package_result.stat.exists }}"
+    
+    - name: install Package
+      debug: 
+        msg: "The package will be installed"
+      when: package_result.stat.exists is false
+
+    - name: Copy Package
+      copy: 
+        src: containerd-1.7.16-x86_64-1.txz
+        dest: /tmp/containerd-1.7.16-x86_64-1.txz
+      when: package_result.stat.exists is false
+
+    - name: Install Package
+      shell: sudo /sbin/installpkg /tmp/containerd-1.7.16-x86_64-1.txz
+      register: package_log
+
+      

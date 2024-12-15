@@ -1,0 +1,21 @@
+---
+
+- name: slackware-k8s remove playbook
+  gather_facts: false
+  hosts: nodes
+
+  vars:
+    k8s_core_packages: 
+      - kubeadm-1.31.0-x86_64-1
+
+  tasks:
+    - name: DEBUG package list
+      debug:
+        var: k8s_core_packages
+    
+    - name: Remove core packages
+      include_tasks: removepkg.yaml
+      loop: "{{ k8s_core_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'

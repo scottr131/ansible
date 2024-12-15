@@ -1,0 +1,33 @@
+---
+
+- name: Containerd deployment playbook
+  gather_facts: false
+  hosts: test
+
+  tasks:
+    - name: Package installed test
+      stat:
+        path: /var/lib/pkgtools/packages/containerd-1.7.16-x86_64-1
+      register: package_result
+
+    - name: Copy Package
+      copy: 
+        src: containerd-1.7.16-x86_64-1.txz
+        dest: /tmp/containerd-1.7.16-x86_64-1.txz
+      when: package_result.stat.exists is false
+
+    - name: Install Package
+      shell: /sbin/installpkg /tmp/containerd-1.7.16-x86_64-1.txz
+      register: package_log
+      when: package_result.stat.exists is false
+      become: true
+
+    - name: Show log
+      debug:
+        msg: "{{ package_log }}"
+    
+    - name: Remove temp file
+      file:
+        path: /tmp/containerd-1.7.16-x86_64-1.txz
+        state: absent
+      become: true

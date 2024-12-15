@@ -1,0 +1,27 @@
+---
+
+- name: Containerd removal playbook
+  gather_facts: false
+  hosts: test
+
+  tasks:
+    - name: Package installed test
+      stat:
+        path: /var/lib/pkgtools/packages/containerd-1.7.16-x86_64-1
+      register: package_result
+
+    - name: Remove Package
+      shell: /sbin/removepkg containerd-1.7.16-x86_64-1
+      become: true
+      register: package_log
+   
+
+    - name: Show log
+      debug:
+        msg: "{{ package_log }}"
+    
+    - name: Remove temp file
+      file:
+        path: /var/lib/pkgtools/packages/containerd-1.7.16-x86_64-1
+        state: absent
+      become: true

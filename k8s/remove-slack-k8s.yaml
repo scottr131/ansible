@@ -1,0 +1,24 @@
+---
+
+- name: slackware-k8s remove playbook
+  gather_facts: false
+  hosts: test
+
+  vars:
+    k8s_core_packages: 
+      - containerd-1.7.16-x86_64-1
+      - crictl-1.31.1-x86_64-1
+      - cni-plugins-1.5.1-x86_64-1
+      - runc-1.1.14-x86_64-1
+
+  tasks:
+    - name: DEBUG package list
+      debug:
+        var: k8s_core_packages
+    
+    - name: Remove core packages
+      include_tasks: removepkg.yaml
+      loop: "{{ k8s_core_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'

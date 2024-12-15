@@ -1,0 +1,27 @@
+---
+
+- name: cni-plugins removal playbook
+  gather_facts: false
+  hosts: test
+
+  tasks:
+    - name: Package installed test
+      stat:
+        path: /var/lib/pkgtools/packages/cni-plugins-1.5.1-x86_64-1.txz
+      register: package_result
+
+    - name: Remove Package
+      shell: /sbin/removepkg cni-plugins-1.5.1-x86_64-1.txz
+      become: true
+      register: package_log
+   
+
+    - name: Show log
+      debug:
+        msg: "{{ package_log }}"
+    
+    - name: Remove temp file
+      file:
+        path: /var/lib/pkgtools/packages/cni-plugins-1.5.1-x86_64-1.txz
+        state: absent
+      become: true

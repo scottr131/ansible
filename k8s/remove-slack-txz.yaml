@@ -1,0 +1,30 @@
+---
+
+- name: Slackware package removal playbook
+  gather_facts: false
+  hosts: test
+
+  vars:
+    pkg_basename: crictl-1.31.1-x86_64-1
+
+  tasks:
+    - name: Package installed test
+      stat:
+        path: '/var/lib/pkgtools/packages/{{ pkg_basename }}'
+      register: package_result
+
+    - name: Remove Package
+      shell: '/sbin/removepkg {{ pkg_basename }}'
+      become: true
+      register: package_log
+      when: package_result.stat.exists is true
+   
+    - name: Show log
+      debug:
+        msg: "{{ package_log }}"
+    
+    - name: Remove temp file
+      file:
+        path: '/tmp/{{ pkg_basename }}.txz'
+        state: absent
+      become: true

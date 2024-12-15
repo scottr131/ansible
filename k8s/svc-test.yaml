@@ -1,0 +1,45 @@
+---
+
+- name: slackware package deployment playbook
+  gather_facts: true
+  hosts: nodes
+
+  vars:
+    tst_basename: crictl-1.31.1-x86_64-1
+    pkg_basename: runc-1.1.14-x86_64-1
+
+  tasks:
+    - name: Package installed test
+      shell: ps fax | grep containerd | grep /usr/local/bin
+      register: psoutput
+
+    - name: out
+      debug:
+        msg: "{{ psoutput }}"
+
+    - name: socket
+      stat:
+        path: /run/containerd/containerd.sock
+      register: socket_exists
+
+    - name: Show pkg var
+      debug:
+        msg: "{{ socket_exists.stat.exists }}"
+
+    - name: Running
+      shell: pgrep -x containerd
+      register: mypid
+      ignore_errors: true
+
+    - name: svc-out-not-run
+      debug:
+        msg: "Service not running"
+      when: mypid.rc == 1
+
+    - name: svc-out-run
+      debug:
+        msg: "Service running"
+      when: mypid.rc == 0
+
+    
+
