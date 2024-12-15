@@ -1,0 +1,35 @@
+---
+
+- name: slackware-distcc user playbook
+  gather_facts: false
+  hosts: nodes
+
+  vars:
+    k8s_core_packages: 
+      - containerd-1.7.16-x86_64-1
+      - crictl-1.31.1-x86_64-1
+      - cni-plugins-1.5.1-x86_64-1
+      - runc-1.1.14-x86_64-1
+#      - kubelet-1.31.0-x86_64-1
+#      - kubeadm-1.31.0-x86_64-2
+      - nerdctl-1.7.7-x86_64-1
+    k8s_control_packages:
+      - kubectl-1.31.0-x86_64-2
+
+  tasks:
+    
+    - name: users | distcc | create group
+      tags: groups,distcc,users
+      become: true
+      group:
+        name: distcc
+        state: present
+
+    - name: users | distcc | create user
+      tags: distcc,users
+      become: true
+      user:
+        name: distcc
+        group: distcc
+        groups: users
+        state: present
