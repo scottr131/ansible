@@ -1,0 +1,77 @@
+---
+
+- name: slackware incus install playbook
+  gather_facts: false
+  hosts: nodes
+
+  vars:
+    incus_packages: 
+      - raft-0.22.1-x86_64-1_SBo
+      - cowsql-1.15.9-x86_64-1_SBo
+      - incus-6.14.0-x86_64
+  tasks:
+    - name: DEBUG package list
+      debug:
+        var: incus_packages
+    
+    - name: Install core packages
+      include_tasks: installpkg.yaml
+      loop: "{{ incus_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/incus-stack/'
+
+    - name: Install rc.incusd file
+      copy:
+        src: files/incus-stack/rc.d/rc.incusd
+        dest: /etc/rc.d/rc.incusd
+      become: true
+
+    - name: Set permissions on rc.containerd
+      file:
+        path: /etc/rc.d/rc.incusd
+        owner: root
+        group: root
+        mode: '0744'
+      become: true
+
+    - name: Install default config file
+      copy:
+        src: files/incus-stack/default/incus
+        dest: /etc/default/incus
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/incus
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default cgroups config file
+      copy:
+        src: files/incus-stack/default/cgroups
+        dest: /etc/default/cgroups
+      become: true
+
+    - name: Set permissions on cgroups default config
+      file:
+        path: /etc/default/cgroups
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: subgid and subuid allocation
+      shell: 'echo \"root:1000000:1000000000\" | tee -a /etc/subuid /etc/subgid'
+      become: true
+
+    - name: Enable IP forwarding rc.ip_forward
+      file:
+        path: /etc/rc.d/rc.ip_forward
+        state: touch
+        mode: u+x
+      become: true
+     

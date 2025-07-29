@@ -1,0 +1,23 @@
+---
+
+- name: slackware-incus groups playbook
+  gather_facts: false
+  hosts: nodes
+
+  tasks:
+    
+    - name: users | distcc | create group
+      tags: groups,incus
+      become: true
+      group:
+        name: incus
+        gid: 345
+        state: present
+
+    - name: users | distcc | create group
+      tags: groups,incus-admin
+      become: true
+      group:
+        name: incus-admin
+        gid: 346
+        state: present
