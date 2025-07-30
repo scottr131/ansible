@@ -85,14 +85,30 @@
         mode: '0644'
       become: true
 
-    - name: subgid and subuid allocation
-      shell: 'echo \"root:1000000:1000000000\" | tee -a /etc/subuid /etc/subgid'
+
+    - name: subgid allocation
+      lineinfile:
+        path: /etc/subgid
+        regexp: '^root:'
+        line: root:1000000:1000000000
+        state: present
+        create: true
       become: true
 
-    - name: Enable IP forwarding rc.ip_forward
+    - name: subuid allocation
+      lineinfile:
+        path: /etc/subuid
+        regexp: '^root:'
+        line: root:1000000:1000000000
+        state: present
+        create: true
+      become: true
+
+     
+    - name: Set permissions to enable IP forwarding
       file:
         path: /etc/rc.d/rc.ip_forward
-        state: touch
-        mode: u+x
+        owner: root
+        group: root
+        mode: '0744'
       become: true
-     
