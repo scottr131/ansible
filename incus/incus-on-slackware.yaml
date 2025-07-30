@@ -11,12 +11,22 @@
       - incus-6.14.0-x86_64
       - skopeo-1.19.0-x86_64
     support_packages:
-      - OpenJDK17U-jdk_x64_linux_hotspot_17.0.16_8-x86_64
+      - go-1.24.5-x86_64
+    conflict_packages:
+      - gcc-go-15.1.0-x86_64-1
+      
   tasks:
     - name: DEBUG package list
       debug:
         var: incus_packages
-    
+
+    - name: Remove conflict packages
+      include_tasks: removepkg.yaml
+      loop: "{{ conflict_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}' 
+
     - name: Install core packages
       include_tasks: installpkg.yaml
       loop: "{{ incus_packages }}"
