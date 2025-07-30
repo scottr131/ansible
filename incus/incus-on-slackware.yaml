@@ -9,6 +9,9 @@
       - raft-0.22.1-x86_64-1_SBo
       - cowsql-1.15.9-x86_64-1_SBo
       - incus-6.14.0-x86_64
+      - skopeo-1.19.0-x86_64
+    support_packages:
+      - OpenJDK17U-jdk_x64_linux_hotspot_17.0.16_8-x86_64
   tasks:
     - name: DEBUG package list
       debug:
@@ -21,6 +24,14 @@
       vars:
         pkg_basename: '{{ item }}'
         pkg_source_dir: 'files/incus-stack/'
+
+    - name: Install support packages
+      include_tasks: installpkg.yaml
+      loop: "{{ support_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
 
     - name: Install rc.incusd file
       copy:
