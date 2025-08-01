@@ -1,0 +1,26 @@
+- name: Package installed test
+  stat:
+    path: '/var/lib/pkgtools/packages/{{ pkg_basename }}'
+  register: package_result
+
+- name: Copy Package
+  copy: 
+    src: '{{ pkg_source_dir }}{{ pkg_basename }}.txz'
+    dest: '/tmp/{{ pkg_basename }}.txz'
+  when: package_result.stat.exists is false
+
+- name: Install Package
+  shell: '/sbin/installpkg /tmp/{{ pkg_basename }}.txz'
+  register: package_log
+  when: package_result.stat.exists is false
+  become: true
+
+- name: Show log
+  debug:
+    msg: "{{ package_result.stat.exists }}"
+
+- name: Remove temp file
+  file:
+    path: '/tmp/{{ pkg_basename }}.txz'
+    state: absent
+  become: true
