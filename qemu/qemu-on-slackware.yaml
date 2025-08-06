@@ -17,10 +17,6 @@
       - spice-0.16.0-x86_64-1_SBo
       - usbredir-0.15.0-x86_64-1_SBo
   tasks:
-    - name: DEBUG package list
-      debug:
-        var: qemu_packages
-    
     - name: Install qemu packages
       include_tasks: installpkg.yaml
       loop: "{{qemu_packages }}"
@@ -36,4 +32,4 @@
         - pkg_basename is defined 
       vars:
         pkg_basename: '{{ item }}'
-
+        pkg_source_dir: 'files/qemu-stack/'

@@ -1,0 +1,135 @@
+---
+
+- name: slackware linstor install playbook
+  gather_facts: false
+  hosts: nodes
+
+  vars:
+    linstor_packages: 
+      - linstor-server-1.31.3-x86_64-1_SBo
+      - linstor_client-1.25.4-x86_64-1_SBo
+      - drbd-9.2.14-x86_64-1_SBo
+      - drbd-utils-9.32.0-rc.1-x86_64-1_SBo
+      - thin-provisioning-tools-1.2.0-x86_64-1_SBo
+      - zfs-2.3.3-x86_64-1_SBo
+    support_packages:
+      - jdk-17.0.16+8-x86_64-1_SBo
+  
+  tasks:
+    - name: DEBUG package list
+      debug:
+        var: linstor_packages
+    
+    - name: Install core packages
+      include_tasks: installpkg.yaml
+      loop: "{{ linstor_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/linstor-stack/'
+
+    - name: Install support packages
+      include_tasks: installpkg.yaml
+      loop: "{{ support_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
+
+    - name: Install rc.linstor-controller file
+      copy:
+        src: files/linstor-stack/rc.d/rc.linstor-controller
+        dest: /etc/rc.d/rc.linstor-controller
+      become: true
+
+    - name: Set permissions on rc.linstor-controller
+      file:
+        path: /etc/rc.d/rc.linstor-controller
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install rc.linstor-satellite file
+      copy:
+        src: files/linstor-stack/rc.d/rc.linstor-satellite
+        dest: /etc/rc.d/rc.linstor-satellite
+      become: true
+
+    - name: Set permissions on rc.linstor-satellite
+      file:
+        path: /etc/rc.d/rc.linstor-satellite
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default config file
+      copy:
+        src: files/linstor-stack/default/linstor-controller
+        dest: /etc/default/linstor-controller
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/linstor-controller
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default config file
+      copy:
+        src: files/linstor-stack/default/linstor-satellite
+        dest: /etc/default/linstor-satellite
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/linstor-satellite
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install rc.zfs file
+      copy:
+        src: files/linstor-stack/rc.d/rc.zfs
+        dest: /etc/rc.d/rc.zfs
+      become: true
+
+    - name: Set permissions on rc.zfs
+      file:
+        path: /etc/rc.d/rc.zfs
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default zfs config file
+      copy:
+        src: files/linstor-stack/default/zfs
+        dest: /etc/default/zfs
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/zfs
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+
+    - name: Make sure drbd module is loaded on boot
+      lineinfile:
+        path: /etc/rc.d/rc.modules.local
+        regexp: '^/sbin/modprobe drbd'
+        line: /sbin/modprobe drbd
+      become: true
+
+    - name: Make sure zfs module is loaded on boot
+      lineinfile:
+        path: /etc/rc.d/rc.modules.local
+        regexp: '^/sbin/modprobe zfs'
+        line: /sbin/modprobe zfs
+      become: true
