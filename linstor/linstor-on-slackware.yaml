@@ -9,7 +9,7 @@
       - linstor-server-1.31.3-x86_64-1_SBo
       - linstor_client-1.25.4-x86_64-1_SBo
       - drbd-9.2.14-x86_64-1_SBo
-      - drbd-utils-9.32.0-rc.1-x86_64-1_SBo
+      - drbd-utils-9.32.0-x86_64-1_SBo
       - thin-provisioning-tools-1.2.0-x86_64-1_SBo
       - zfs-2.3.3-x86_64-1_SBo
     support_packages:
@@ -21,15 +21,15 @@
         var: linstor_packages
     
     - name: Install core packages
-      include_tasks: installpkg.yaml
+      include_tasks: ../slackware/installpkg.yaml
       loop: "{{ linstor_packages }}"
       when: pkg_basename is defined
       vars:
         pkg_basename: '{{ item }}'
-        pkg_source_dir: 'files/linstor-stack/'
+        pkg_source_dir: 'files/'
 
     - name: Install support packages
-      include_tasks: installpkg.yaml
+      include_tasks: ../slackware/installpkg.yaml
       loop: "{{ support_packages }}"
       when: pkg_basename is defined
       vars:
@@ -38,7 +38,7 @@
 
     - name: Install rc.linstor-controller file
       copy:
-        src: files/linstor-stack/rc.d/rc.linstor-controller
+        src: files/rc.d/rc.linstor-controller
         dest: /etc/rc.d/rc.linstor-controller
       become: true
 
@@ -51,7 +51,7 @@
 
     - name: Install rc.linstor-satellite file
       copy:
-        src: files/linstor-stack/rc.d/rc.linstor-satellite
+        src: files/rc.d/rc.linstor-satellite
         dest: /etc/rc.d/rc.linstor-satellite
       become: true
 
@@ -65,7 +65,7 @@
 
     - name: Install default config file
       copy:
-        src: files/linstor-stack/default/linstor-controller
+        src: files/default/linstor-controller
         dest: /etc/default/linstor-controller
       become: true
 
@@ -79,7 +79,7 @@
 
     - name: Install default config file
       copy:
-        src: files/linstor-stack/default/linstor-satellite
+        src: files/default/linstor-satellite
         dest: /etc/default/linstor-satellite
       become: true
 
@@ -93,7 +93,7 @@
 
     - name: Install rc.zfs file
       copy:
-        src: files/linstor-stack/rc.d/rc.zfs
+        src: files/rc.d/rc.zfs
         dest: /etc/rc.d/rc.zfs
       become: true
 
@@ -107,7 +107,7 @@
 
     - name: Install default zfs config file
       copy:
-        src: files/linstor-stack/default/zfs
+        src: files/default/zfs
         dest: /etc/default/zfs
       become: true
 
