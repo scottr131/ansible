@@ -8,10 +8,10 @@
     incus_packages: 
       - raft-0.22.1-x86_64-1_SBo
       - cowsql-1.15.9-x86_64-1_SBo
-      - incus-6.14.0-x86_64-1_SBo
-      - skopeo-1.19.0-x86_64-1_SBo
+      - incus-6.15-x86_64-1_SBo
+      - skopeo-1.20.0-x86_64-1_SBo
     support_packages:
-      - go-1.24.5-x86_64-1_SBo
+      - go-1.25.0-x86_64-1_SBo
     conflict_packages:
       - gcc-go-15.1.0-x86_64-1
       
@@ -21,22 +21,22 @@
         var: incus_packages
 
     - name: Remove conflict packages
-      include_tasks: removepkg.yaml
+      include_tasks: ../slackware/removepkg.yaml
       loop: "{{ conflict_packages }}"
       when: pkg_basename is defined
       vars:
         pkg_basename: '{{ item }}' 
 
     - name: Install core packages
-      include_tasks: installpkg.yaml
+      include_tasks: ../slackware/installpkg.yaml
       loop: "{{ incus_packages }}"
       when: pkg_basename is defined
       vars:
         pkg_basename: '{{ item }}'
-        pkg_source_dir: 'files/incus-stack/'
+        pkg_source_dir: 'files/'
 
     - name: Install support packages
-      include_tasks: installpkg.yaml
+      include_tasks: ../slackware/installpkg.yaml
       loop: "{{ support_packages }}"
       when: pkg_basename is defined
       vars:
@@ -45,7 +45,7 @@
 
     - name: Install rc.incusd file
       copy:
-        src: files/incus-stack/rc.d/rc.incusd
+        src: rc.d/rc.incusd
         dest: /etc/rc.d/rc.incusd
       become: true
 
@@ -59,7 +59,7 @@
 
     - name: Install default config file
       copy:
-        src: files/incus-stack/default/incus
+        src: default/incus
         dest: /etc/default/incus
       become: true
 

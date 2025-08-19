@@ -1,0 +1,121 @@
+---
+
+- name: slackware ovn install playbook
+  gather_facts: false
+  hosts: nodes
+
+  vars:
+    ovn_packages: 
+      - openvswitch-3.5.1-x86_64-1_SBo
+      - ovn-25.03.1-x86_64-1_SBo
+    support_packages:
+      - protobuf-c-1.5.2-x86_64-1_SBo
+      - libyang-3.13.5-x86_64-1_SBo
+  tasks:
+    - name: DEBUG package list
+      debug:
+        var: ovn_packages
+    
+    - name: Install core packages
+      include_tasks: ../slackware/installpkg.yaml
+      loop: "{{ ovn_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
+
+    - name: Install support packages
+      include_tasks: ../slackware/installpkg.yaml
+      loop: "{{ support_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
+
+    - name: Install rc.openvswitch file
+      copy:
+        src: files/rc.d/rc.openvswitch
+        dest: /etc/rc.d/rc.openvswitch
+      become: true
+
+    - name: Set permissions on rc.openvswitch
+      file:
+        path: /etc/rc.d/rc.openvswitch
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install rc.ovn-central file
+      copy:
+        src: files/rc.d/rc.ovn-central
+        dest: /etc/rc.d/rc.ovn-central
+      become: true
+
+    - name: Set permissions on rc.ovn-central
+      file:
+        path: /etc/rc.d/rc.ovn-central
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+
+    - name: Install rc.ovn-host file
+      copy:
+        src: files/rc.d/rc.ovn-host
+        dest: /etc/rc.d/rc.ovn-host
+      become: true
+
+    - name: Set permissions on rc.ovn-host
+      file:
+        path: /etc/rc.d/rc.ovn-host
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+
+
+    - name: Install default config file
+      copy:
+        src: files/default/openvswitch
+        dest: /etc/default/openvswitch
+      become: true
+      
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/openvswitch
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default config file
+      copy:
+        src: files/default/ovn-central
+        dest: /etc/default/ovn-central
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/ovn-central
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default config file
+      copy:
+        src: files/default/ovn-host
+        dest: /etc/default/ovn-host
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/ovn-host
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+

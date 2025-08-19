@@ -18,18 +18,18 @@
       - usbredir-0.15.0-x86_64-1_SBo
   tasks:
     - name: Install qemu packages
-      include_tasks: installpkg.yaml
+      include_tasks: ../slackware/installpkg.yaml
       loop: "{{qemu_packages }}"
       when: pkg_basename is defined
       vars:
         pkg_basename: '{{ item }}'
-        pkg_source_dir: 'files/qemu-stack/'
+        pkg_source_dir: 'files/'
 
     - name: Install spice packages
-      include_tasks: installpkg.yaml
+      include_tasks: ../slackware/installpkg.yaml
       loop: "{{ spice_packages }}"
       when:
         - pkg_basename is defined 
       vars:
         pkg_basename: '{{ item }}'
-        pkg_source_dir: 'files/qemu-stack/'
+        pkg_source_dir: 'files/'
