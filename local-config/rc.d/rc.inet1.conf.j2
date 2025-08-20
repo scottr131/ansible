@@ -1,0 +1,41 @@
+# Network configuration for Slackware 15+
+# For Incus/LINSTOR/OVN cluster
+
+MAXNICS="8"
+GATEWAY="{{ cluster_gateway }}"
+
+# Physical interfaces
+# eth0 - connected to cluster LAN switch, no tagged VLANs
+# eth1 - connected to OVN LAN switch, 10,15,20 tagged 
+
+# cluster-br - cluster LAN, Incus and LINSTOR traffic
+IFNAME[0]="cluster-br"
+BRNICS[0]="eth0"
+IPADDRS[0]="{{ cluster_ip }}"
+
+# uplink-br - uplink for OVN networks
+IFNAME[1]="uplink-br"
+BRNICS[1]="eth1"
+
+# eth1 VLAN 10 - client LAN traffic
+IFNAME[2]="eth1.10"
+
+# client-br - bridge to client LAN
+IFNAME[3]="client-br"
+BRNICS[3]="eth1.10"
+
+# eth1 VLAN 15 - OVN cluster traffic
+IFNAME[4]="eth1.15"
+
+# ovn-br - encapsulated OVN intra-cluster traffic
+IFNAME[5]="ovn-br"
+BRNICS[5]="eth1.15"
+IPADDRS[5]="{{ ovn_ip }}"
+
+# eth1 VLAN 20 - mgmt LAN, traffic for management LAN
+IFNAME[6]="eth1.20"
+
+# mgmt-br - management LAN
+IFNAME[7]="mgmt-br"
+BRNICS[7]="eth1.20"
+

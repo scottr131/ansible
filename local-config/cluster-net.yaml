@@ -1,0 +1,14 @@
+---
+
+- name: slackware rc.inet1.conf user playbook
+  gather_facts: false
+  hosts: nodes
+
+  vars:
+
+  tasks:
+    - name: Deploy network config file
+      template:
+        src: files/rc.d/rc.inet1.conf.j2
+        dest: /etc/rc.d/rc.inet1.conf
+      become: true

@@ -1,0 +1,58 @@
+---
+
+- name: slackware local customizations install playbook
+  gather_facts: false
+  hosts: nodes
+
+
+  tasks:
+
+    - name: Install rc.local file
+      copy:
+        src: files/rc.d/rc.local
+        dest: /etc/rc.d/rc.local
+      become: true
+
+    - name: Set permissions on rc.local
+      file:
+        path: /etc/rc.d/rc.local
+        owner: root
+        group: root
+        mode: '0744'
+      become: true
+
+    - name: Install rc.local_shutdown file
+      copy:
+        src: files/rc.d/rc.local_shutdown
+        dest: /etc/rc.d/rc.local_shutdown
+      become: true
+
+    - name: Set permissions on rc.local_shutdown
+      file:
+        path: /etc/rc.d/rc.local_shutdown
+        owner: root
+        group: root
+        mode: '0744'
+      become: true
+
+    - name: Install default java config file
+      copy:
+        src: files/default/java
+        dest: /etc/default/java
+      become: true
+
+    - name: Set permissions on cgroups default config
+      file:
+        path: /etc/default/java
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+
+    - name: Configure system path
+      lineinfile:
+        path: /etc/profile
+        regexp: '^PATH='
+        line: PATH="/usr/local/bin:/usr/bin:/bin:/usr/games:/opt/go/bin:/opt/java/bin"
+      become: true
