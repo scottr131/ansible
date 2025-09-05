@@ -7,9 +7,9 @@
   vars:
     qemu_packages: 
       - libblkio-v1.5.0-x86_64-1_SBo
-      - libiscsi-1.20.2-x86_64-1_SBo
+      - libiscsi-1.20.3-x86_64-1_SBo
       - numactl-2.0.19-x86_64-1_SBo
-      - qemu-10.0.3-x86_64-1_SBo
+      - qemu-10.1.0-x86_64-1_SBo
       - swtpm-0.10.1-x86_64-1_SBo
       - libtpms-0.10.1-x86_64-1_SBo
     spice_packages:
