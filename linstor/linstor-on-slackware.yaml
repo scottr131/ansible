@@ -120,6 +120,19 @@
         mode: '0644'
       become: true
 
+    - name: Install rc.drbd file
+      copy:
+        src: files/rc.d/rc.drbd
+        dest: /etc/rc.d/rc.drbd
+      become: true
+
+    - name: Set permissions on rc.drbd
+      file:
+        path: /etc/rc.d/rc.drbd
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
 
     - name: Make sure drbd module is loaded on boot
       lineinfile:
