@@ -7,12 +7,12 @@
   vars:
     linstor_packages: 
       - linstor-server-1.31.3-x86_64-1_SBo
-      - linstor_client-1.25.4-x86_64-1_SBo
-      - python_linstor-1.25.3-x86_64-1_SBo
+      - linstor_client-1.26.1-x86_64-1_SBo
+      - python_linstor-1.26.1-x86_64-1_SBo
       - drbd-9.2.14-x86_64-1_SBo
       - drbd-utils-9.32.0-x86_64-1_SBo
-      - thin-provisioning-tools-1.2.0-x86_64-1_SBo
-      - zfs-2.3.3-x86_64-1_SBo
+      - thin-provisioning-tools-1.2.1-x86_64-1_SBo
+      - zfs-2.3.4-x86_64-1_SBo
     support_packages:
       - jdk-17.0.16+8-x86_64-1_SBo
   
