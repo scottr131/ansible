@@ -6,7 +6,7 @@
 
   vars:
     ovn_packages: 
-      - openvswitch-3.5.1-x86_64-1_SBo
+      - openvswitch-3.6.0-x86_64-1_SBo
       - ovn-25.03.1-x86_64-1_SBo
     support_packages:
       - protobuf-c-1.5.2-x86_64-1_SBo
