@@ -1,0 +1,15 @@
+---
+
+- name: slackware rc.inet1.conf user playbook
+  gather_facts: false
+  hosts: nodes
+
+  vars:
+
+  tasks:
+
+    - name: Install  file
+      copy:
+        src: hosts/{{ inventory_hostname }}/ovn-central
+        dest: /etc/default/ovn-central
+      become: true
