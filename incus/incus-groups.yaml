@@ -2,7 +2,7 @@
 
 - name: slackware-incus groups playbook
   gather_facts: false
-  hosts: nodes
+  hosts: clusternode
 
   tasks:
     

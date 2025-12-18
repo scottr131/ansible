@@ -2,18 +2,19 @@
 
 - name: slackware incus install playbook
   gather_facts: false
-  hosts: nodes
+  hosts: clusternode
 
   vars:
     incus_packages: 
       - raft-0.22.1-x86_64-1_SBo
       - cowsql-1.15.9-x86_64-1_SBo
-      - incus-6.16-x86_64-1_SBo
+      - incus-6.19.1-x86_64-1_SBo
       - skopeo-1.20.0-x86_64-1_SBo
     support_packages:
-      - google-go-lang-1.25.0-x86_64-1
+      - go-1.25.4-x86_64-1_SBo
     conflict_packages:
       - gcc-go-15.2.0-x86_64-1
+      - google-go-lang-1.25.5-x86_64-1
       
   tasks:
     - name: DEBUG package list

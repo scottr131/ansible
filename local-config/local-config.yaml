@@ -2,14 +2,14 @@
 
 - name: slackware local customizations install playbook
   gather_facts: false
-  hosts: nodes
+  hosts: clusternode
 
 
   tasks:
 
     - name: Install rc.local file
       copy:
-        src: files/rc.d/rc.local
+        src: rc.d/rc.local
         dest: /etc/rc.d/rc.local
       become: true
 
@@ -23,7 +23,7 @@
 
     - name: Install rc.local_shutdown file
       copy:
-        src: files/rc.d/rc.local_shutdown
+        src: rc.d/rc.local_shutdown
         dest: /etc/rc.d/rc.local_shutdown
       become: true
 
@@ -37,7 +37,7 @@
 
     - name: Install default java config file
       copy:
-        src: files/default/java
+        src: default/java
         dest: /etc/default/java
       become: true
 

@@ -2,15 +2,15 @@
 
 - name: slackware ovn install playbook
   gather_facts: false
-  hosts: nodes
+  hosts: clusternode
 
   vars:
     ovn_packages: 
-      - openvswitch-3.6.0-x86_64-1_SBo
-      - ovn-25.03.1-x86_64-1_SBo
+      - openvswitch-3.6.1-x86_64-1_SBo
+      - ovn-25.09.2-x86_64-1_SBo
     support_packages:
       - protobuf-c-1.5.2-x86_64-1_SBo
-      - libyang-3.13.5-x86_64-1_SBo
+      - libyang-3.13.6-x86_64-1_SBo
   tasks:
     - name: DEBUG package list
       debug:
@@ -34,7 +34,7 @@
 
     - name: Install rc.openvswitch file
       copy:
-        src: files/rc.d/rc.openvswitch
+        src: rc.d/rc.openvswitch
         dest: /etc/rc.d/rc.openvswitch
       become: true
 
@@ -47,7 +47,7 @@
 
     - name: Install rc.ovn-central file
       copy:
-        src: files/rc.d/rc.ovn-central
+        src: rc.d/rc.ovn-central
         dest: /etc/rc.d/rc.ovn-central
       become: true
 
@@ -62,7 +62,7 @@
 
     - name: Install rc.ovn-host file
       copy:
-        src: files/rc.d/rc.ovn-host
+        src: rc.d/rc.ovn-host
         dest: /etc/rc.d/rc.ovn-host
       become: true
 
@@ -78,7 +78,7 @@
 
     - name: Install default config file
       copy:
-        src: files/default/openvswitch
+        src: default/openvswitch
         dest: /etc/default/openvswitch
       become: true
       
@@ -92,7 +92,7 @@
 
     - name: Install default config file
       copy:
-        src: files/default/ovn-central
+        src: default/ovn-central
         dest: /etc/default/ovn-central
       become: true
 
@@ -106,7 +106,7 @@
 
     - name: Install default config file
       copy:
-        src: files/default/ovn-host
+        src: default/ovn-host
         dest: /etc/default/ovn-host
       become: true
 
