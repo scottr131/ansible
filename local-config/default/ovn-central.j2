@@ -1,0 +1,20 @@
+OVN_CTL_OPTS="--ovn-nb-logfile=/var/log/ovn/ovsdb-server-nb.log \
+    --db-nb-pidfile=/var/run/ovn/ovnnb_db.pid \
+    --db-nb-sock=/var/run/ovn/ovnnb_db.sock \
+    --db-nb-ctrl-sock=/var/run/ovn/ovnnb_db.ctl \
+    --ovn-sb-logfile=/var/log/ovn/ovsdb-server-sb.log \
+    --db-sb-pidfile=/var/run/ovn/ovnsb_db.pid \
+    --db-sb-sock=/var/run/ovn/ovnsb_db.sock \
+    --db-sb-ctrl-sock=/var/run/ovn/ovnsb_db.ctl \
+    --db-nb-addr={{ ovn_nb_addr }} \
+{% if ovn_nb_cluster_remote_addr is defined and ovn_nb_cluster_remote_addr %}    --db-nb-cluster-remote-addr={{ ovn_nb_cluster_remote_addr }} \
+{% endif %}
+    --db-nb-create-insecure-remote=yes \
+    --db-sb-addr={{ ovn_sb_addr }} \
+{% if ovn_sb_cluster_remote_addr is defined and ovn_sb_cluster_remote_addr %}    --db-sb-cluster-remote-addr={{ ovn_sb_cluster_remote_addr }} \
+{% endif %}
+    --db-sb-create-insecure-remote=yes \
+    --db-nb-cluster-local-addr={{ ovn_nb_cluster_local_addr }} \
+    --db-sb-cluster-local-addr={{ ovn_sb_cluster_local_addr }} \
+    --ovn-northd-nb-db={{ ovn_northd_nb_db_string }} \
+    --ovn-northd-sb-db={{ ovn_northd_sb_db_string }}"

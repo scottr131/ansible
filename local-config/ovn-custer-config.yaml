@@ -2,7 +2,7 @@
 
 - name: slackware rc.inet1.conf user playbook
   gather_facts: false
-  hosts: nodes
+  hosts: clusternode
 
   vars:
 

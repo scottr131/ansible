@@ -1,0 +1,28 @@
+---
+
+- name: slackware rc.inet1.conf user playbook
+  gather_facts: false
+  hosts: clusternode
+
+  vars:
+
+  tasks:
+    - name: Deploy network config file
+      template:
+        src: rc.d/rc.inet1.conf.10gb-mesh.j2
+        dest: /etc/rc.d/rc.inet1.conf
+      become: true
+
+    - name: Configure eth2 mtu
+      lineinfile:
+        path: /etc/rc.d/rc.local
+        regexp: '^/usr/sbin/ip link set eth1'
+        line: "/usr/sbin/ip link set eth1 mtu 9000"
+      become: true
+
+    - name: Configure eth1 mtu
+      lineinfile:
+        path: /etc/rc.d/rc.local
+        regexp: '^/usr/sbin/ip link set eth2'
+        line: "/usr/sbin/ip link set eth2 mtu 9000"
+      become: true

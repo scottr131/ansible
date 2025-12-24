@@ -1,0 +1,22 @@
+# Network configuration for Slackware 15+
+# For Incus/LINSTOR/OVN cluster
+
+MAXNICS="2"
+GATEWAY="{{ cluster_gateway }}"
+
+# Physical interfaces
+# eth0 - connected to management LAN switch, no tagged VLANs
+# eth1 - bridged with eth2, cluster network
+# eth2 - bridged with eth1, cluster network
+
+# br-mgmt - cluster LAN, Incus and LINSTOR traffic
+IFNAME[0]="br-mgmt"
+BRNICS[0]="eth0"
+IPADDRS[0]="{{ node_mgmt_ip }}"
+
+# br-cluster - cluster network
+IFNAME[1]="br-cluster"
+BRNICS[1]="eth1 eth2"
+IPADDRS[1]="{{ node_cluster_ip }}"
+IFOPTS[1]="stp_state 1 | mtu 9000"
+MTU[1]="9000"

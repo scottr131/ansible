@@ -1,0 +1,14 @@
+---
+
+- name: slackware ovn cluster playbook
+  gather_facts: false
+  hosts: clusternode
+
+  vars:
+
+  tasks:
+    - name: Deploy ovn central config file
+      template:
+        src: default/ovn-central.j2
+        dest: /etc/default/ovn-central
+      become: true
