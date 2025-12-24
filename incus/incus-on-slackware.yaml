@@ -12,6 +12,7 @@
       - skopeo-1.20.0-x86_64-1_SBo
     support_packages:
       - go-1.25.4-x86_64-1_SBo
+      - incus-ui-canonical-incus-0.18.4-x86_64-1_SBo
     conflict_packages:
       - gcc-go-15.2.0-x86_64-1
       - google-go-lang-1.25.5-x86_64-1
