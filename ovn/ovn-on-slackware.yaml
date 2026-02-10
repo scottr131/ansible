@@ -10,7 +10,6 @@
       - ovn-25.09.2-x86_64-1_SBo
     support_packages:
       - protobuf-c-1.5.2-x86_64-1_SBo
-      - libyang-3.13.6-x86_64-1_SBo
   tasks:
     - name: DEBUG package list
       debug:
