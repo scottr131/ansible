@@ -6,13 +6,13 @@
 
   vars:
     linstor_packages: 
-      - linstor-server-1.32.3-x86_64-1_SBo
+      - linstor-server-1.33.1-x86_64-1_SBo
       - linstor_client-1.27.1-x86_64-1_SBo
       - python_linstor-1.27.1-x86_64-1_SBo
       - drbd-9.3.0-x86_64-1_SBo
       - drbd-utils-9.33.0-x86_64-1_SBo
       - thin-provisioning-tools-1.3.1-x86_64-1_SBo
-      - zfs-2.3.5-x86_64-1_SBo
+      - zfs-2.4.0-x86_64-1_SBo
     support_packages:
       - temurin-jdk17-17.0.17+10-x86_64-1_SBo
   
@@ -66,27 +66,13 @@
 
     - name: Install default config file
       copy:
-        src: default/linstor-controller
-        dest: /etc/default/linstor-controller
+        src: default/linstor
+        dest: /etc/default/linstor
       become: true
 
     - name: Set permissions on default config
       file:
-        path: /etc/default/linstor-controller
-        owner: root
-        group: root
-        mode: '0644'
-      become: true
-
-    - name: Install default config file
-      copy:
-        src: default/linstor-satellite
-        dest: /etc/default/linstor-satellite
-      become: true
-
-    - name: Set permissions on default config
-      file:
-        path: /etc/default/linstor-satellite
+        path: /etc/default/linstor
         owner: root
         group: root
         mode: '0644'
