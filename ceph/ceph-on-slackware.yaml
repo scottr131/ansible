@@ -1,0 +1,160 @@
+---
+
+- name: slackware ceph install playbook
+  gather_facts: false
+  hosts: clusternode
+
+  vars:
+    ceph_packages: 
+      - ceph-20.1.1-x86_64-1_SBo
+    support_packages:
+      - bcrypt-4.3.0-x86_64-1_SBo
+      - cryptography-45.0.7-x86_64-1_SBo
+      - rdma-core-61.0-x86_64-1_SBo
+      - libnbd-1.24.0-x86_64-1_SBo
+      - googletest-1.17.0-x86_64-1_SBo
+      - benchmark-1.9.5-x86_64-1_SBo
+      - snappy-1.2.2-x86_64-1_SBo
+      - oath-toolkit-2.6.13-x86_64-1_SBo
+      - numactl-2.0.19-x86_64-1_SBo
+      - lttng-ust-2.14.0-x86_64-1_SBo
+      - babeltrace-1.5.11-x86_64-1_SBo
+      - boost-1.90.0-x86_64-1_SBo
+      - thrift-0.22.0-x86_64-1_SBo
+      - rabbitmq-c-0.15.0-x86_64-1_SBo
+      - librdkafka-2.13.0-x86_64-1_SBo
+    pip_packages:
+      - scipy
+      - cherrypy
+      - jsonpatch
+      - python-dateutil
+      - prettytable
+      - jmespath
+      - xmltodict
+      - pyOpenSSL
+      - Routes
+
+  tasks:
+    
+    - name: Install core packages
+      include_tasks: ../slackware/installpkg.yaml
+      loop: "{{ ceph_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
+
+    - name: Install support packages
+      include_tasks: ../slackware/installpkg.yaml
+      loop: "{{ support_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
+    
+    - name: Install Python support packages
+      loop: "{{ pip_packages }}"
+      ansible.builtin.pip:
+        name: '{{ item }}'
+        state: present
+      
+    - name: Install rc.ceph-mgr file
+      copy:
+        src: rc.d/rc.ceph-mgr
+        dest: /etc/rc.d/rc.ceph-mgr
+      become: true
+
+    - name: Set permissions on rc.ceph-mgr
+      file:
+        path: /etc/rc.d/rc.ceph-mgr
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install rc.ceph-mon file
+      copy:
+        src: rc.d/rc.ceph-mon
+        dest: /etc/rc.d/rc.ceph-mon
+      become: true
+
+    - name: Set permissions on rc.ceph-mon
+      file:
+        path: /etc/rc.d/rc.ceph-mon
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+
+    - name: Install rc.ceph-osd file
+      copy:
+        src: rc.d/rc.ceph-osd
+        dest: /etc/rc.d/rc.ceph-osd
+      become: true
+
+    - name: Set permissions on rc.ceph-osd
+      file:
+        path: /etc/rc.d/rc.ceph-osd
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+
+
+    - name: Install default config file
+      copy:
+        src: default/ceph
+        dest: /etc/default/ceph
+      become: true
+      
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/ceph
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default config file
+      copy:
+        src: default/ceph-mgr
+        dest: /etc/default/ceph-mgr
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/ceph-mgr
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Install default config file
+      copy:
+        src: default/ceph-mon
+        dest: /etc/default/ceph-mon
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/ceph-mon
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+
+    - name: Install default config file
+      copy:
+        src: default/ceph-osd
+        dest: /etc/default/ceph-osd
+      become: true
+
+    - name: Set permissions on default config
+      file:
+        path: /etc/default/ceph-osd
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
