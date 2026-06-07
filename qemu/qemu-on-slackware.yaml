@@ -9,13 +9,10 @@
       - libblkio-v1.5.0-x86_64-1_SBo
       - libiscsi-1.20.3-x86_64-1_SBo
       - numactl-2.0.19-x86_64-1_SBo
-      - qemu-10.2.0-x86_64-1_SBo
+      - qemu-11.0.1-x86_64-1_SBo
       - swtpm-0.10.1-x86_64-1_SBo
       - libtpms-0.10.2-x86_64-1_SBo
-    spice_packages:
-      - spice-protocol-0.14.5-x86_64-1_SBo
-      - spice-0.16.0-x86_64-1_SBo
-      - usbredir-0.15.0-x86_64-1_SBo
+
   tasks:
     - name: Install qemu packages
       include_tasks: ../slackware/installpkg.yaml
@@ -25,11 +22,3 @@
         pkg_basename: '{{ item }}'
         pkg_source_dir: 'files/'
 
-    - name: Install spice packages
-      include_tasks: ../slackware/installpkg.yaml
-      loop: "{{ spice_packages }}"
-      when:
-        - pkg_basename is defined 
-      vars:
-        pkg_basename: '{{ item }}'
-        pkg_source_dir: 'files/'
