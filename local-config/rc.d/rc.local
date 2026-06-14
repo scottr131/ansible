@@ -11,6 +11,21 @@ if [ -r /etc/default/java ]; then
   . /etc/default/java
 fi
 
+# Jumbo frames. rc.inet1.conf's MTU[] only applies to interfaces that carry
+# an address, so bond0 (no IP) cannot get its MTU there — and the VLAN MTU
+# lines in rc.inet1.conf fail at boot while their parent is still 1500.
+# Raise the bond here (slaves inherit from the master), then the jumbo
+# VLANs (120 = OVN encap, 130 = storage); re-pin br-lan at 1500 so jumbo
+# frames never hit the management LAN. Guarded — only fires where the
+# interfaces exist, so this is a no-op on the OSD VMs.
+if [ -e /sys/class/net/bond0 ]; then
+  /sbin/ip link set bond0 mtu 9000
+  [ -e /sys/class/net/bond0.120 ] && /sbin/ip link set bond0.120 mtu 9000
+  [ -e /sys/class/net/bond0.130 ] && /sbin/ip link set bond0.130 mtu 9000
+  [ -e /sys/class/net/br-storage ] && /sbin/ip link set br-storage mtu 9000
+  [ -e /sys/class/net/br-lan ] && /sbin/ip link set br-lan mtu 1500
+fi
+
 if [ -x /etc/rc.d/rc.openvswitch ]; then
   /etc/rc.d/rc.openvswitch start
 fi
@@ -33,6 +48,10 @@ fi
 
 if [ -x /etc/rc.d/rc.ceph-mgr ]; then
   /etc/rc.d/rc.ceph-mgr start
+fi
+
+if [ -x /etc/rc.d/rc.ceph-mds ]; then
+  /etc/rc.d/rc.ceph-mds start
 fi
 
 if [ -x /etc/rc.d/rc.ceph-osd ]; then

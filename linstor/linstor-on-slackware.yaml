@@ -9,12 +9,12 @@
       - linstor-server-1.33.1-x86_64-1_SBo
       - linstor_client-1.27.1-x86_64-1_SBo
       - python_linstor-1.27.1-x86_64-1_SBo
-      - drbd-9.3.0-x86_64-1_SBo
-      - drbd-utils-9.33.0-x86_64-1_SBo
-      - thin-provisioning-tools-1.3.1-x86_64-1_SBo
-      - zfs-2.4.0-x86_64-1_SBo
+      - drbd-9.3.2-x86_64-1_SBo
+      - drbd-utils-9.34.0-x86_64-1_SBo
+      - thin-provisioning-tools-1.3.2-x86_64-1_SBo
+      - zfs-2.4.2-x86_64-1_SBo
     support_packages:
-      - temurin-jdk17-17.0.17+10-x86_64-1_SBo
+      - temurin-jdk17-17.0.19+10-x86_64-1_SBo
   
   tasks:
     - name: DEBUG package list

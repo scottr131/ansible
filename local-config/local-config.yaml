@@ -2,7 +2,7 @@
 
 - name: slackware local customizations install playbook
   gather_facts: false
-  hosts: clusternode
+  hosts: "{{ target_hosts }}"
 
 
   tasks:

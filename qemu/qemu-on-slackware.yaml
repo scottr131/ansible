@@ -10,8 +10,6 @@
       - libiscsi-1.20.3-x86_64-1_SBo
       - numactl-2.0.19-x86_64-1_SBo
       - qemu-11.0.1-x86_64-1_SBo
-      - swtpm-0.10.1-x86_64-1_SBo
-      - libtpms-0.10.2-x86_64-1_SBo
 
   tasks:
     - name: Install qemu packages

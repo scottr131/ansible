@@ -6,10 +6,9 @@
 
   vars:
     ovn_packages: 
-      - openvswitch-3.6.1-x86_64-1_SBo
+      - openvswitch-3.6.3-x86_64-1_SBo
       - ovn-25.09.2-x86_64-1_SBo
-    support_packages:
-      - protobuf-c-1.5.2-x86_64-1_SBo
+
   tasks:
     - name: DEBUG package list
       debug:
@@ -18,14 +17,6 @@
     - name: Install core packages
       include_tasks: ../slackware/installpkg.yaml
       loop: "{{ ovn_packages }}"
-      when: pkg_basename is defined
-      vars:
-        pkg_basename: '{{ item }}'
-        pkg_source_dir: 'files/'
-
-    - name: Install support packages
-      include_tasks: ../slackware/installpkg.yaml
-      loop: "{{ support_packages }}"
       when: pkg_basename is defined
       vars:
         pkg_basename: '{{ item }}'

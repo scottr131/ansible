@@ -2,7 +2,7 @@
 
 - name: slackware ceph install playbook
   gather_facts: false
-  hosts: clusternode
+  hosts: "{{ target_hosts }}"
 
   vars:
     ceph_packages: 
@@ -52,11 +52,16 @@
         pkg_basename: '{{ item }}'
         pkg_source_dir: 'files/'
     
+    # become is REQUIRED here: without it pip runs as clusteradm and silently
+    # falls back to a --user install in ~clusteradm/.local — invisible to the
+    # ceph daemons/CLI running as root/ceph (bit us on the first cluster-init
+    # run: "missing" prettytable that was right here in the list).
     - name: Install Python support packages
       loop: "{{ pip_packages }}"
       ansible.builtin.pip:
         name: '{{ item }}'
         state: present
+      become: true
       
     - name: Install rc.ceph-mgr file
       copy:
