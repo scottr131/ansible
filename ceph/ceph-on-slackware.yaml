@@ -21,7 +21,7 @@
       - babeltrace-1.5.11-x86_64-1_SBo
       - boost-1.91.0-x86_64-1_SBo
       - thrift-0.23.0-x86_64-1_SBo
-      - rabbitmq-c-0.15.0-x86_64-1_SBo
+      - rabbitmq-c-0.16.0-x86_64-1_SBo
       - librdkafka-2.14.1-x86_64-1_SBo
     pip_packages:
       - scipy
