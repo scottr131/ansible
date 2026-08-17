@@ -1,0 +1,28 @@
+---
+
+- name: slackware incus install playbook
+  gather_facts: false
+  hosts: "{{ target_hosts }}"
+  vars:
+    remove_packages: 
+      - qemu-11.0.1-x86_64-1_SBo
+    install_packages:
+      - qemu-11.1.0-x86_64-1_SBo
+      
+  tasks:
+    - name: Remove packages
+      include_tasks: ../slackware/removepkg.yaml
+      loop: "{{ remove_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
+
+    - name: Install new packages
+      include_tasks: ../slackware/installpkg.yaml
+      loop: "{{ install_packages }}"
+      when: pkg_basename is defined
+      vars:
+        pkg_basename: '{{ item }}'
+        pkg_source_dir: 'files/'
+
