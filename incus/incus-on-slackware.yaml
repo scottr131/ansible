@@ -2,33 +2,17 @@
 
 - name: slackware incus install playbook
   gather_facts: false
-  hosts: clusternode
-
+  hosts: "{{ target_hosts }}"
   vars:
     incus_packages: 
       - raft-0.22.1-x86_64-1_SBo
       - cowsql-1.15.9-x86_64-1_SBo
-      - incus-7.1.0-x86_64-1_SBo
-      - skopeo-1.23.0-x86_64-1_SBo
+      - incus-7.3.0-x86_64-1_SBo
+      - skopeo-1.24.0-x86_64-1_SBo
     support_packages:
-      - go-1.26.3-x86_64-1_SBo
-      - incus-ui-canonical-incus-0.19.9-x86_64-1_SBo
-    conflict_packages:
-      - gcc-go-15.2.0-x86_64-1
-      - google-go-lang-1.25.5-x86_64-1
+      - incus-ui-canonical-incus-0.21.6-x86_64-1_SBo
       
   tasks:
-    - name: DEBUG package list
-      debug:
-        var: incus_packages
-
-    - name: Remove conflict packages
-      include_tasks: ../slackware/removepkg.yaml
-      loop: "{{ conflict_packages }}"
-      when: pkg_basename is defined
-      vars:
-        pkg_basename: '{{ item }}' 
-
     - name: Install core packages
       include_tasks: ../slackware/installpkg.yaml
       loop: "{{ incus_packages }}"
@@ -46,14 +30,9 @@
         pkg_source_dir: 'files/'
 
     - name: Install rc.incusd file
-      copy:
+      ansible.builtin.copy:
         src: rc.d/rc.incusd
         dest: /etc/rc.d/rc.incusd
-      become: true
-
-    - name: Set permissions on rc.containerd
-      file:
-        path: /etc/rc.d/rc.incusd
         owner: root
         group: root
         mode: '0744'
@@ -63,11 +42,6 @@
       copy:
         src: default/incus
         dest: /etc/default/incus
-      become: true
-
-    - name: Set permissions on default config
-      file:
-        path: /etc/default/incus
         owner: root
         group: root
         mode: '0644'
@@ -79,7 +53,6 @@
         regexp: '^CGROUPS_VERSION='
         line: CGROUPS_VERSION=2
       become: true
-
 
     - name: subgid allocation
       lineinfile:
@@ -98,7 +71,6 @@
         state: present
         create: true
       become: true
-
      
     - name: Set permissions to enable IP forwarding
       file:

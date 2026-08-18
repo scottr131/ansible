@@ -2,11 +2,11 @@
 
 - name: slackware-incus groups playbook
   gather_facts: false
-  hosts: clusternode
+  hosts: "{{ target_hosts }}"
 
   tasks:
     
-    - name: users | distcc | create group
+    - name: create group
       tags: groups,incus
       become: true
       group:
@@ -14,7 +14,7 @@
         gid: 345
         state: present
 
-    - name: users | distcc | create group
+    - name: create admin group
       tags: groups,incus-admin
       become: true
       group:
