@@ -10,7 +10,11 @@
       - incus-7.3.0-x86_64-1_SBo
       - skopeo-1.24.0-x86_64-1_SBo
     support_packages:
+      - go-1.27.0-x86_64-1_SBo
       - incus-ui-canonical-incus-0.21.6-x86_64-1_SBo
+    conflict_packages:
+      - gcc-go-15.2.0-x86_64-1
+      - google-go-lang-1.25.5-x86_64-1
       
   tasks:
     - name: Install core packages

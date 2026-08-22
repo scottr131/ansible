@@ -9,7 +9,7 @@
       - ceph-20.1.1-x86_64-1_SBo
     support_packages:
       - bcrypt-5.0.0-x86_64-1_SBo
-      - cryptography-49.0.0-x86_64-1_SBo
+      - cryptography-50.0.0-x86_64-1_SBo
       - rdma-core-64.0-x86_64-1_SBo
       - libnbd-1.24.3-x86_64-1_SBo
       - googletest-1.18.0-x86_64-1_SBo
@@ -19,7 +19,7 @@
       - numactl-2.0.19-x86_64-1_SBo
       - lttng-ust-2.15.1-x86_64-1_SBo
       - babeltrace-1.5.11-x86_64-1_SBo
-      - boost-1.91.0-x86_64-1_SBo
+      - boost-1.92.0-x86_64-1_SBo
       - thrift-0.24.0-x86_64-1_SBo
       - rabbitmq-c-0.17.0-x86_64-1_SBo
       - librdkafka-2.15.0-x86_64-1_SBo
