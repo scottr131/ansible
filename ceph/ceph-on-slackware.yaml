@@ -8,21 +8,21 @@
     ceph_packages: 
       - ceph-20.1.1-x86_64-1_SBo
     support_packages:
-      - bcrypt-4.3.0-x86_64-1_SBo
-      - cryptography-45.0.7-x86_64-1_SBo
-      - rdma-core-63.0-x86_64-1_SBo
-      - libnbd-1.24.2-x86_64-1_SBo
-      - googletest-1.17.0-x86_64-1_SBo
+      - bcrypt-5.0.0-x86_64-1_SBo
+      - cryptography-50.0.0-x86_64-1_SBo
+      - rdma-core-64.0-x86_64-1_SBo
+      - libnbd-1.24.3-x86_64-1_SBo
+      - googletest-1.18.0-x86_64-1_SBo
       - benchmark-1.9.5-x86_64-1_SBo
       - snappy-1.2.2-x86_64-1_SBo
       - oath-toolkit-2.6.14-x86_64-1_SBo
       - numactl-2.0.19-x86_64-1_SBo
       - lttng-ust-2.15.1-x86_64-1_SBo
       - babeltrace-1.5.11-x86_64-1_SBo
-      - boost-1.91.0-x86_64-1_SBo
-      - thrift-0.23.0-x86_64-1_SBo
-      - rabbitmq-c-0.16.0-x86_64-1_SBo
-      - librdkafka-2.14.2-x86_64-1_SBo
+      - boost-1.92.0-x86_64-1_SBo
+      - thrift-0.24.0-x86_64-1_SBo
+      - rabbitmq-c-0.17.0-x86_64-1_SBo
+      - librdkafka-2.15.0-x86_64-1_SBo
     pip_packages:
       - scipy
       - cherrypy
