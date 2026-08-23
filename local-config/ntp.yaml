@@ -1,0 +1,109 @@
+---
+
+# Insert (or remove) local NTP server lines in /etc/ntp.conf and restart
+# ntpd. The stock Slackware ntp.conf is LEFT IN PLACE — only individual
+# `server <addr> iburst` lines are managed, placed after the commented
+# pool.ntp.org examples (appended at EOF if that block isn't present).
+#
+# HISTORY: v1 of this playbook owned the whole file and clobbered the stock
+# config — made worse by ntp_servers arriving from Semaphore as a plain
+# STRING, which Jinja for-loops iterate CHARACTER BY CHARACTER ("server 1",
+# "server 0", "server ." …). Both fixed: stock file untouched, and the
+# server vars are normalized below (bare string, comma-separated string, or
+# proper list all work). files/ntp.conf + ntp-restore.yaml put the stock
+# file back if it's ever damaged.
+#
+# Variables (Semaphore extra vars, or group/host vars):
+#   target_hosts        Host pattern. Default: nodes.
+#   ntp_servers         Servers to add — list, or string like "10.1.31.1"
+#                       or "10.1.31.1,10.1.31.2".
+#   ntp_servers_remove  Optional, same formats — these server lines are
+#                       removed from the file.
+#   ntp_step            Default true: stop ntpd, step the clock once with
+#                       `ntpdate -b`, then start — clears an existing large
+#                       offset (Ceph clock skew) immediately instead of
+#                       slewing for hours. false = edit + restart only.
+
+- name: Insert NTP server(s) into /etc/ntp.conf
+  gather_facts: false
+  hosts: "{{ target_hosts | default('nodes') }}"
+
+  vars:
+    # Normalize string / comma-string / list into a clean list.
+    ntp_add_list: >-
+      {{ ((ntp_servers.split(',') if ntp_servers is string else ntp_servers)
+          | map('trim') | reject('equalto', '') | list)
+         if ntp_servers is defined else [] }}
+    ntp_remove_list: >-
+      {{ ((ntp_servers_remove.split(',') if ntp_servers_remove is string
+           else ntp_servers_remove)
+          | map('trim') | reject('equalto', '') | list)
+         if ntp_servers_remove is defined else [] }}
+
+  tasks:
+    - name: Require something to do
+      assert:
+        that:
+          - (ntp_add_list | length > 0) or (ntp_remove_list | length > 0)
+        fail_msg: >-
+          Set ntp_servers (servers to add) and/or ntp_servers_remove —
+          list or comma-separated string, e.g. ntp_servers=10.1.31.1
+
+    - name: Remove server lines
+      lineinfile:
+        path: /etc/ntp.conf
+        regexp: '^server\s+{{ item | regex_escape }}(\s|$)'
+        state: absent
+      loop: "{{ ntp_remove_list }}"
+      become: true
+
+    # regexp makes this idempotent (an existing line for the same server is
+    # replaced in place); insertafter lands new lines after the commented
+    # pool examples, matching the stock file's layout.
+    - name: Insert server lines
+      lineinfile:
+        path: /etc/ntp.conf
+        regexp: '^server\s+{{ item | regex_escape }}(\s|$)'
+        line: "server {{ item }} iburst"
+        insertafter: '^#server\s+\S*pool\.ntp\.org'
+      loop: "{{ ntp_add_list }}"
+      become: true
+
+    - name: Make rc.ntpd executable
+      file:
+        path: /etc/rc.d/rc.ntpd
+        mode: '0755'
+      become: true
+
+    - name: Stop ntpd before stepping the clock
+      command: /etc/rc.d/rc.ntpd stop
+      failed_when: false
+      changed_when: false
+      when:
+        - ntp_step | default(true) | bool
+        - ntp_add_list | length > 0
+      become: true
+
+    # -b steps the clock immediately (ntpd alone slews small offsets slowly
+    # and refuses offsets > ~1000s). Hard-fails if the server is
+    # unreachable — better to know now than to have ntpd silently unsynced.
+    - name: Step the clock once
+      command: ntpdate -b {{ ntp_add_list | first }}
+      when:
+        - ntp_step | default(true) | bool
+        - ntp_add_list | length > 0
+      become: true
+
+    - name: Restart ntpd
+      command: /etc/rc.d/rc.ntpd restart
+      become: true
+
+    - name: Read peer status
+      command: ntpq -pn
+      register: ntpq_out
+      changed_when: false
+      become: true
+
+    - name: Show peer status
+      debug:
+        var: ntpq_out.stdout_lines

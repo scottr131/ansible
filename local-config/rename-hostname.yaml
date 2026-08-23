@@ -1,0 +1,61 @@
+---
+# Rename a node from its provisioning hostname to its final cluster hostname.
+#
+# Background: nodes are provisioned with a temporary name (e.g. tmp-compute1)
+# so that DNS lookups for the final name (which resolves to a static IP) do not
+# interfere with reaching the node over DHCP.  Run this playbook while the node
+# is still reachable under its temporary name or IP, before the static network
+# config is applied.
+#
+# Slackware hostname locations (from netconfig):
+#   /etc/HOSTNAME         — FQDN, read by rc.S at boot: hostname $(cut -f1 -d. HOSTNAME)
+#   /etc/hosts            — loopback alias so `hostname -f` resolves without DNS
+#
+# Required variable (pass with -e or set in inventory host_vars):
+#   new_hostname    short name only, e.g.  compute1
+#
+# Optional variable:
+#   domain          default: cluster.local
+#
+# Example — rename a single node by its temporary name:
+#   ansible-playbook rename-hostname.yaml -i inventory -l tmp-compute1 \
+#       -e new_hostname=compute1
+
+- name: Rename node hostname
+  hosts: "{{ target_hosts }}"
+  gather_facts: false
+  become: true
+
+  vars:
+    domain: "cluster.local"
+    new_fqdn: "{{ new_hostname }}.{{ domain }}"
+
+  pre_tasks:
+    - name: Verify new_hostname is set
+      ansible.builtin.fail:
+        msg: "new_hostname is required — pass it with -e new_hostname=<shortname>"
+      when: new_hostname is not defined
+
+  tasks:
+    - name: Write /etc/HOSTNAME
+      ansible.builtin.copy:
+        content: "{{ new_fqdn }}\n"
+        dest: /etc/HOSTNAME
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Set running hostname
+      ansible.builtin.command: /bin/hostname {{ new_hostname }}
+      changed_when: true
+
+    - name: Update node identity line in /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        # Match the loopback line carrying the FQDN, not the `127.0.0.1 localhost` line.
+        regexp: '^127\.0\.0\.1\s+\S+\.{{ domain | regex_escape }}\b'
+        line: "127.0.0.1\t{{ new_fqdn }} {{ new_hostname }}"
+        insertafter: '^127\.0\.0\.1\s+localhost'
+        owner: root
+        group: root
+        mode: '0644'

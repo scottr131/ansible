@@ -1,0 +1,61 @@
+---
+# Add a public key to clusteradm's authorized_keys on the target hosts.
+#
+# Appends the key idempotently — existing authorized_keys entries are preserved
+# (this never rewrites the whole file). Mirrors the layout the installer creates
+# (node/provisioning/autoinstall.sh): clusteradm's primary group is `users`,
+# ~/.ssh is 0700 and authorized_keys is 0600, both owned clusteradm:users.
+#
+# Required variables (pass with -e or set in inventory/host_vars):
+#   target_hosts    host pattern / group to run against (used as the play's hosts)
+#   clusteradm_key  the public key string, e.g. "ssh-ed25519 AAAA... comment"
+#
+# Optional variables (defaults match the installer):
+#   clusteradm_user   default: clusteradm
+#   clusteradm_group  default: users
+#   clusteradm_home   default: /home/{{ clusteradm_user }}
+#
+# Example:
+#   ansible-playbook clusteradm-authorized-key.yaml -i inventory \
+#       -e target_hosts=pnode4 \
+#       -e 'clusteradm_key=ssh-ed25519 AAAAC3Nza... admin@laptop'
+
+- name: Authorize a clusteradm SSH public key
+  hosts: "{{ target_hosts }}"
+  gather_facts: false
+  become: true
+
+  vars:
+    clusteradm_user: clusteradm
+    clusteradm_group: users
+    clusteradm_home: "/home/{{ clusteradm_user }}"
+
+  pre_tasks:
+    - name: Verify required variables are set
+      ansible.builtin.assert:
+        that:
+          - target_hosts is defined
+          - clusteradm_key is defined
+          - clusteradm_key | trim | length > 0
+        fail_msg: >-
+          target_hosts and clusteradm_key are required — pass them with
+          -e target_hosts=<pattern> -e clusteradm_key='<public key string>'
+
+  tasks:
+    - name: Ensure clusteradm ~/.ssh exists
+      ansible.builtin.file:
+        path: "{{ clusteradm_home }}/.ssh"
+        state: directory
+        owner: "{{ clusteradm_user }}"
+        group: "{{ clusteradm_group }}"
+        mode: '0700'
+
+    - name: Add the public key to authorized_keys
+      ansible.builtin.lineinfile:
+        path: "{{ clusteradm_home }}/.ssh/authorized_keys"
+        line: "{{ clusteradm_key | trim }}"
+        state: present
+        create: true
+        owner: "{{ clusteradm_user }}"
+        group: "{{ clusteradm_group }}"
+        mode: '0600'

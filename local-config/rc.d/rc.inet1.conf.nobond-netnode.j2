@@ -1,0 +1,63 @@
+# Network configuration for Slackware 15+
+# For Incus/LINSTOR/OVN cluster — 2×1GbE LACP bond + VLAN design
+# Managed by Ansible (cluster-net-bond.yaml)
+#
+# Per-node variables (set in host_vars/<host>/network.yaml):
+#   cluster_gateway   default gateway (shared across nodes)
+#   cluster_ip        br-lan IP in CIDR notation, e.g. 10.1.31.41/24
+#   ovn_ip            bond0.120 IP in CIDR notation, e.g. 192.168.120.41/24
+#   storage_ip        bond0.130 IP in CIDR notation, e.g. 192.168.130.41/24
+#   lan_hwaddr        br-lan bridge MAC (optional; pins MAC across reboots)
+#   vmlan_hwaddr      br-vmlan bridge MAC (optional)
+#   uplink_hwaddr     br-uplink bridge MAC (optional)
+
+MAXNICS="10"
+GATEWAY="{{ lan_gateway }}"
+
+# br-lan: customer LAN 
+IFNAME[0]="br-lan"
+BRNICS[0]="eth0"
+IPADDRS[0]="{{ lan_ip }}"
+# Pin: without this the bridge auto-inherits bond0's 9000 once the bond is
+# raised, and jumbo frames blackhole on the 1500 management LAN.
+MTU[0]="9000"
+{% if lan_hwaddr is defined and lan_hwaddr %}
+HWADDR[5]="{{ lan_hwaddr }}"
+{% endif %}
+
+# bond0.120: OVN intra-cluster overlay traffic (VLAN 120, jumbo frames)
+IFNAME[1]="eth0.120"
+IPADDRS[1]="{{ ovn_ip }}"
+# Takes effect on `rc.inet1 restart` once bond0 is already at 9000. At BOOT
+# the parent is still 1500, so this fails (a VLAN can't exceed its parent)
+# and rc.local re-applies it after raising the bond.
+MTU[1]="9000"
+
+# bond0.125: OVN uplink (VLAN 125) — unrouted, owned by OVN
+IFNAME[2]="eth0.125"
+
+# bond0.130: Storage / LINSTOR traffic (VLAN 130, jumbo frames)
+IFNAME[3]="eth1"
+IPADDRS[3]="{{ storage_ip }}"
+# Same boot-vs-restart behavior as bond0.120 above.
+MTU[3]="9000"
+
+# bond0.100: Cluster LAN 
+IFNAME[4]="eth1.100"
+
+
+# br-vmlan: Incus uplink bridge for VM traffic
+IFNAME[5]="br-cluster"
+BRNICS[5]="eth1.100"
+IPADDRS[5]="{{ cluster_ip }}"
+{% if cluster_hwaddr is defined and cluster_hwaddr %}
+HWADDR[5]="{{ cluster_hwaddr }}"
+{% endif %}
+
+# br-uplink: OVN uplink bridge
+IFNAME[6]="br-uplink"
+BRNICS[6]="eth0.125"
+IPADDRS[6]=""
+{% if uplink_hwaddr is defined and uplink_hwaddr %}
+HWADDR[6]="{{ uplink_hwaddr }}"
+{% endif %}
