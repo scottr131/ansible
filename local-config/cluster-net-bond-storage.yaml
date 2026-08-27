@@ -1,0 +1,37 @@
+---
+# Deploy rc.inet1.conf for the LACP bond + VLAN cluster network design.
+#
+# Produces: bond0 (802.3ad eth0+eth1) → VLAN interfaces → bridges
+#   br-lan    management + Incus cluster (VLAN 1 / untagged)
+#   br-vmlan  VM traffic (VLAN 112)
+#   br-uplink OVN uplink (VLAN 125)
+#   bond0.120 OVN overlay, jumbo (VLAN 120)
+#   bond0.130 storage / LINSTOR (VLAN 130)
+#   br-storage storage bridge
+#
+# Required host_vars per node (set in host_vars/<host>/network.yaml):
+#   cluster_gateway   default gateway
+#   cluster_ip        br-lan address (CIDR), e.g. 10.1.31.41/24
+#   ovn_ip            bond0.120 address (CIDR), e.g. 192.168.120.41/24
+#   storage_ip        bond0.130 address (CIDR), e.g. 192.168.130.41/24
+#
+# Optional per-node vars (omitted from config if unset):
+#   lan_hwaddr        br-lan bridge MAC
+#   vmlan_hwaddr      br-vmlan bridge MAC
+#   uplink_hwaddr     br-uplink bridge MAC
+
+- name: Deploy bond+VLAN network config
+  gather_facts: false
+  hosts: "{{ target_hosts }}"
+
+  vars:
+
+  tasks:
+    - name: Deploy rc.inet1.conf
+      ansible.builtin.template:
+        src: rc.d/rc.inet1.conf.bond.storage.j2
+        dest: /etc/rc.d/rc.inet1.conf
+        owner: root
+        group: root
+        mode: '0644'
+      become: true

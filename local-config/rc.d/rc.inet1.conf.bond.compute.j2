@@ -1,0 +1,85 @@
+# Network configuration for Slackware 15+
+# For Incus/LINSTOR/OVN cluster 1GbE LACP bond + VLAN design
+# Managed by Ansible (cluster-net-bond.yaml)
+#
+# Per-node variables (set in host_vars/<host>/network.yaml):
+#   cluster_gateway   default gateway (shared across nodes)
+#   cluster_ip        br-lan IP in CIDR notation, e.g. 10.1.31.41/24
+#   ovn_ip            bond0.120 IP in CIDR notation, e.g. 192.168.120.41/24
+#   storage_ip        bond0.130 IP in CIDR notation, e.g. 192.168.130.41/24
+#   lan_hwaddr        br-lan bridge MAC (optional; pins MAC across reboots)
+#   vmlan_hwaddr      br-vmlan bridge MAC (optional)
+#   uplink_hwaddr     br-uplink bridge MAC (optional)
+
+MAXNICS="10"
+GATEWAY="{{ cluster_gateway }}"
+
+# bond0: LACP 802.3ad aggregate of eth0 + eth1
+IFNAME[0]="bond0"
+BONDNICS[0]="eth0 eth1"
+BONDMODE[0]="802.3ad"
+IFOPTS[0]="lacp_rate fast | xmit_hash_policy layer3+4 | miimon 100"
+IPADDRS[0]=""
+# rc.inet1 applies MTU[] only to interfaces that carry an address bond0
+# has none, so this line can never take effect. The bond's 9000 MTU is set
+# from rc.local instead.
+#MTU[0]="9000"
+
+# bond0.120: OVN intra-cluster overlay traffic (VLAN 120, jumbo frames)
+IFNAME[1]="bond0.120"
+IPADDRS[1]="{{ ovn_ip }}"
+# Takes effect on `rc.inet1 restart` once bond0 is already at 9000. At BOOT
+# the parent is still 1500, so this fails (a VLAN can't exceed its parent)
+# and rc.local re-applies it after raising the bond.
+MTU[1]="9000"
+
+# bond0.125: OVN uplink (VLAN 125) unrouted, owned by OVN
+IFNAME[2]="bond0.125"
+
+# bond0.130: Storage / LINSTOR traffic (VLAN 130, jumbo frames)
+IFNAME[3]="bond0.130"
+IPADDRS[3]="{{ storage_ip }}"
+# Same boot-vs-restart behavior as bond0.120 above.
+MTU[3]="9000"
+
+# bond0.112: VM traffic (VLAN 112) unrouted, feeds br-vmlan
+IFNAME[4]="bond0.112"
+
+# br-cluster: management LAN and Incus cluster traffic
+IFNAME[5]="br-cluster"
+BRNICS[5]="bond0"
+IPADDRS[5]="{{ cluster_ip }}"
+# without this the bridge auto-inherits bond0's 9000 once the bond is
+# raised, and jumbo frames blackhole on the 1500 management LAN.
+MTU[5]="1500"
+{% if cluster_hwaddr is defined and cluster_hwaddr %}
+HWADDR[5]="{{ cluster_hwaddr }}"
+{% endif %}
+
+# br-vmlan: Incus uplink bridge for VM traffic
+IFNAME[6]="br-vmlan"
+BRNICS[6]="bond0.112"
+IPADDRS[6]=""
+{% if vmlan_hwaddr is defined and vmlan_hwaddr %}
+HWADDR[6]="{{ vmlan_hwaddr }}"
+{% endif %}
+
+# br-uplink: OVN uplink bridge
+IFNAME[7]="br-uplink"
+BRNICS[7]="bond0.125"
+IPADDRS[7]=""
+{% if uplink_hwaddr is defined and uplink_hwaddr %}
+HWADDR[7]="{{ uplink_hwaddr }}"
+{% endif %}
+
+
+# bond0.1: LAN traffic (VLAN 1)  unrouted, feeds br-lan
+IFNAME[8]="bond0.1"
+
+# br-lan: general LAN traffic
+IFNAME[9]="br-lan"
+BRNICS[9]="bond0.1"
+MTU[9]="1500"
+{% if lan_hwaddr is defined and lan_hwaddr %}
+HWADDR[9]="{{ lan_hwaddr }}"
+{% endif %}

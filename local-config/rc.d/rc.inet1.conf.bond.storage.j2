@@ -1,0 +1,74 @@
+# Network configuration for Slackware 15+
+# For Incus/LINSTOR/OVN cluster 1GbE LACP bond + VLAN design
+# Managed by Ansible (cluster-net-bond.yaml)
+#
+# Per-node variables (set in host_vars/<host>/network.yaml):
+#   cluster_gateway   default gateway (shared across nodes)
+#   cluster_ip        br-cluster IP in CIDR notation, e.g. 10.1.31.41/24
+#   ovn_ip            bond0.120 IP in CIDR notation, e.g. 192.168.120.41/24
+#   storage_ip        bond0.130 IP in CIDR notation, e.g. 192.168.130.41/24
+#   lan_hwaddr        br-lan bridge MAC (optional; pins MAC across reboots)
+#   vmlan_hwaddr      br-vmlan bridge MAC (optional)
+#   uplink_hwaddr     br-uplink bridge MAC (optional)
+
+MAXNICS="10"
+GATEWAY="{{ cluster_gateway }}"
+
+# bond0: LACP 802.3ad aggregate of eth0 + eth1
+IFNAME[0]="bond0"
+BONDNICS[0]="eth0 eth1"
+BONDMODE[0]="802.3ad"
+IFOPTS[0]="lacp_rate fast | xmit_hash_policy layer3+4 | miimon 100"
+IPADDRS[0]=""
+# NOTE: rc.inet1 applies MTU[] only to interfaces that carry an address
+# bond0 has none, so this line can never take effect (left for reference).
+# The bond's 9000 MTU is set from rc.local instead (slaves inherit).
+#MTU[0]="9000"
+
+# bond0.120: OVN intra-cluster overlay traffic (VLAN 120, jumbo frames)
+#IFNAME[1]="bond0.120"
+#IPADDRS[1]="{{ ovn_ip }}"
+#MTU[1]="9000"
+
+# bond0.125: OVN uplink (VLAN 125) unrouted, owned by OVN
+#IFNAME[2]="bond0.125"
+
+# bond0.130: Storage / LINSTOR traffic (VLAN 130, jumbo frames). The IP
+# lives on br-storage, so this interface carries no address which means
+# MTU[] can't apply here either; rc.local raises it to 9000 at boot.
+IFNAME[1]="bond0.130"
+#IPADDRS[1]="{{ storage_ip }}"
+
+# bond0.112: VM traffic (VLAN 112) unrouted, feeds br-vmlan
+IFNAME[2]="bond0.112"
+
+# br-lan: management LAN and Incus cluster traffic
+IFNAME[3]="br-lan"
+BRNICS[3]="bond0"
+IPADDRS[3]="{{ cluster_ip }}"
+# Pin: without this the bridge auto-inherits bond0's 9000 once the bond is
+# raised, and jumbo frames blackhole on the 1500 management LAN.
+MTU[3]="1500"
+{% if lan_hwaddr is defined and lan_hwaddr %}
+HWADDR[3]="{{ lan_hwaddr }}"
+{% endif %}
+
+# br-vmlan: Incus uplink bridge for VM traffic
+IFNAME[4]="br-vmlan"
+BRNICS[4]="bond0.112"
+IPADDRS[4]=""
+{% if vmlan_hwaddr is defined and vmlan_hwaddr %}
+HWADDR[4]="{{ vmlan_hwaddr }}"
+{% endif %}
+
+# br-storage: storage network bridge ( mon/OSD-VM traffic)
+IFNAME[5]="br-storage"
+BRNICS[5]="bond0.130"
+IPADDRS[5]="{{ storage_ip }}"
+# Has an address, so MTU[] applies but at BOOT its member bond0.130 is
+# still 1500, so this fails and rc.local re-applies it after raising the
+# bond chain. Works directly on `rc.inet1 restart`.
+MTU[5]="9000"
+{% if storage_hwaddr is defined and storage_hwaddr %}
+HWADDR[5]="{{ storage_hwaddr }}"
+{% endif %}

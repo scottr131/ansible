@@ -28,7 +28,7 @@
 
   vars:
     domain: "cluster.local"
-    new_fqdn: "{{ new_hostname }}.{{ domain }}"
+    new_fqdn: "{{ new_hostname }}.{{ new_domain }}"
 
   pre_tasks:
     - name: Verify new_hostname is set
@@ -53,7 +53,7 @@
       ansible.builtin.lineinfile:
         path: /etc/hosts
         # Match the loopback line carrying the FQDN, not the `127.0.0.1 localhost` line.
-        regexp: '^127\.0\.0\.1\s+\S+\.{{ domain | regex_escape }}\b'
+        regexp: '^127\.0\.0\.1\s+\S+\.{{ new_domain | regex_escape }}\b'
         line: "127.0.0.1\t{{ new_fqdn }} {{ new_hostname }}"
         insertafter: '^127\.0\.0\.1\s+localhost'
         owner: root
