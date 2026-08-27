@@ -42,8 +42,8 @@ IFNAME[1]="bond0.130"
 # bond0.112: VM traffic (VLAN 112) unrouted, feeds br-vmlan
 IFNAME[2]="bond0.112"
 
-# br-lan: management LAN and Incus cluster traffic
-IFNAME[3]="br-lan"
+# br-cluster: management LAN and Incus cluster traffic
+IFNAME[3]="br-cluster"
 BRNICS[3]="bond0"
 IPADDRS[3]="{{ cluster_ip }}"
 # Pin: without this the bridge auto-inherits bond0's 9000 once the bond is
