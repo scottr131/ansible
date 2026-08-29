@@ -1,0 +1,647 @@
+---
+
+# ceph-cluster-init.yaml — bootstrap the Ceph cluster on the storage nodes.
+#
+# This playbook created with Anthropic Fable
+#
+# Run ceph-on-slackware.yaml first against BOTH the bare-metal storage nodes
+# AND the OSD VMs: it installs the ceph package, pip prerequisites, and the
+# rc.ceph-* / /etc/default/ceph* files this playbook configures and starts.
+# This playbook is the automated version of the manual process in
+# intake/ceph-on-slackware.md. It is safe to re-run and safe to point at a
+# partially hand-built cluster: existing keyrings, the fsid, mon stores, and
+# OSDs are detected and reused — never regenerated (regenerating the identity
+# of a live cluster would destroy it).
+#
+# Topology (docs/architecture/node-roles.md): MON + MGR on the bare-metal
+# storage nodes; one OSD VM per node on the storage network, with the OSD
+# data disk attached via virtio or passthrough.
+#
+# Variables (Semaphore extra vars unless noted):
+#   mon_hosts            Required. Pattern for the bare-metal storage nodes —
+#                        each becomes MON + MGR.
+#   osd_hosts            Required. Pattern for the OSD VMs — each becomes one OSD.
+#   ceph_bootstrap_node  Required. Inventory name of the first mon. Its
+#                        fsid/keyrings are authoritative for the cluster.
+#   osd_device           Required for the OSD step. The OSD data disk as seen
+#                        INSIDE the VM — depends on attachment: virtio →
+#                        /dev/sdb-style, NVMe passthrough → /dev/nvme0n1.
+#                        Host var (may differ per VM) or group var. Consumed
+#                        RAW by BlueStore (no filesystem on it).
+#   confirm_osd_create   Must be the LITERAL string "yes" (not true/y) to run
+#                        the destructive OSD-device step. Default: skip it.
+#   ceph_mon_address     Per-host override for a mon's address. Default:
+#                        storage_ip without the CIDR suffix, falling back to
+#                        ansible_host.
+#   ceph_public_network  Default: 192.168.130.0/24 (storage VLAN 130).
+#   ceph_pg_num          osd_pool_default_pg_num. Default 128 — a DELIBERATE
+#                        deviation from the manual doc's 333: at size=3 on
+#                        3 OSDs, 333 PGs/pool exceeds mon_max_pg_per_osd (250)
+#                        and blocks pool creation.
+#   ceph_osd_class_dir   Where the Slackware ceph package installs the RADOS
+#                        object classes (cls_*). Default
+#                        /usr/lib64/rados-classes. The compiled-in default
+#                        points elsewhere; OSDs then can't load classes,
+#                        which surfaces as mgr module failures (seen live:
+#                        devicehealth "disk I/O error"). Set cluster-wide
+#                        once via `ceph config set`, after quorum.
+#
+# Other deviations from the manual doc (intake/ceph-on-slackware.md):
+#   - OSDs are RAW-DEVICE BlueStore: the OSD data dir lives on the VM's root
+#     disk (it only holds the keyring + metadata) with `block` symlinked to
+#     osd_device, which BlueStore consumes whole. The manual doc's
+#     mkfs.xfs + mount layout silently produces a FILE-backed BlueStore
+#     capped at bluestore_block_size (default 100 GiB) — observed live:
+#     a 300 GiB cluster on ~715 GiB of NVMe. A udev rule (+ immediate chown)
+#     keeps the device owned by ceph across reboots, since the daemon runs
+#     --setuser ceph.
+#   - mon keyring + monmap live in /etc/ceph, not /tmp, so re-runs after a
+#     reboot can still add mons (a /tmp keyring would be gone).
+#   - when a mon is added to an ALREADY RUNNING cluster, the live monmap is
+#     fetched (ceph mon getmap) instead of rebuilding one — the upstream
+#     procedure for mon addition. On first formation, each mon builds the
+#     identical initial map locally from the mon list + fsid.
+#   - `ceph mon enable-msgr2` is run once after quorum, clearing the
+#     "monitors have not enabled msgr2" HEALTH_WARN seen in the manual runs.
+#
+# Boot-time start/stop is already handled by the project's rc.local /
+# rc.local_shutdown (cluster/linux repo): they run each rc.ceph-* in the
+# proper order IF it is executable. The chmod +x this playbook performs is
+# therefore the boot enablement — nothing further to wire up.
+#
+# Tags: common, bootstrap, mon, mgr, osd, verify.
+
+- name: ceph | users and directories on all ceph hosts
+  gather_facts: false
+  hosts: "{{ mon_hosts }}:{{ osd_hosts }}"
+  tags: common
+
+  tasks:
+    - name: Create ceph group
+      group:
+        name: ceph
+        system: true
+      become: true
+
+    - name: Create ceph user
+      user:
+        name: ceph
+        group: ceph
+        comment: Ceph
+        system: true
+        home: /home/ceph
+        create_home: true
+      become: true
+
+    - name: Create ceph directories
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.owner }}"
+      loop:
+        - { path: /etc/ceph,     owner: root }
+        - { path: /var/lib/ceph, owner: ceph }
+        - { path: /var/log/ceph, owner: ceph }
+        - { path: /var/run/ceph, owner: ceph }
+      become: true
+
+- name: ceph | cluster identity and keyrings on the bootstrap mon
+  gather_facts: false
+  hosts: "{{ ceph_bootstrap_node }}"
+  tags: bootstrap
+
+  tasks:
+    # One entry per mon: inventory name, mon id (short hostname), and the
+    # storage-network address. Later plays reuse this list via hostvars.
+    - name: Build the mon list
+      set_fact:
+        ceph_mons: >-
+          {{ ceph_mons | default([]) + [ {
+               'inventory': item,
+               'name': hostvars[item].inventory_hostname_short | default(item),
+               'address': hostvars[item].ceph_mon_address
+                          | default((hostvars[item].storage_ip
+                                     | default(hostvars[item].ansible_host
+                                     | default(item))).split('/') | first)
+             } ] }}
+      loop: "{{ query('inventory_hostnames', mon_hosts) }}"
+      tags: always
+
+    # fsid: reuse the one in an existing ceph.conf — NEVER regenerate a live
+    # cluster's identity. Only a first bootstrap generates a fresh uuid.
+    - name: Check for an existing ceph.conf
+      stat:
+        path: /etc/ceph/ceph.conf
+      register: conf_stat
+      tags: always
+
+    - name: Read the existing fsid
+      command: grep -E '^fsid *= *' /etc/ceph/ceph.conf
+      register: existing_fsid
+      changed_when: false
+      when: conf_stat.stat.exists
+      tags: always
+
+    - name: Generate a new fsid
+      command: uuidgen
+      register: new_fsid
+      when: not conf_stat.stat.exists
+      tags: always
+
+    - name: Set the cluster fsid
+      set_fact:
+        ceph_fsid: >-
+          {{ (existing_fsid.stdout.split('=')[1] | trim)
+             if conf_stat.stat.exists else (new_fsid.stdout | trim) }}
+      tags: always
+
+    # force: false — written once at first bootstrap, then never touched, so
+    # hand-added sections (e.g. [mds.*]) survive re-runs. Changing mon
+    # membership later therefore means editing ceph.conf by hand.
+    - name: Write the initial ceph.conf
+      copy:
+        dest: /etc/ceph/ceph.conf
+        force: false
+        owner: ceph
+        group: ceph
+        mode: '0644'
+        content: |
+          [global]
+          fsid = {{ ceph_fsid }}
+          mon_initial_members = {{ ceph_mons | map(attribute='name') | join(', ') }}
+          mon_host = {{ ceph_mons | map(attribute='address') | join(', ') }}
+          mon_allow_pool_delete = true
+          public_network = {{ ceph_public_network | default('192.168.130.0/24') }}
+          auth_cluster_required = cephx
+          auth_service_required = cephx
+          auth_client_required = cephx
+          osd_pool_default_size = 3
+          osd_pool_default_min_size = 2
+          osd_pool_default_pg_num = {{ ceph_pg_num | default(128) }}
+          osd_crush_chooseleaf_type = 1
+      become: true
+
+    - name: Create the cluster (mon.) keyring
+      command: >-
+        ceph-authtool --create-keyring /etc/ceph/ceph.mon.keyring
+        --gen-key -n mon. --cap mon 'allow *'
+      args:
+        creates: /etc/ceph/ceph.mon.keyring
+      become: true
+
+    - name: Create the admin keyring
+      command: >-
+        ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring
+        --gen-key -n client.admin
+        --cap mon 'allow *' --cap osd 'allow *'
+        --cap mds 'allow *' --cap mgr 'allow *'
+      args:
+        creates: /etc/ceph/ceph.client.admin.keyring
+      become: true
+
+    - name: Create the bootstrap-osd keyring
+      command: >-
+        ceph-authtool --create-keyring /etc/ceph/ceph.client.bootstrap-osd.keyring
+        --gen-key -n client.bootstrap-osd
+        --cap mon 'profile bootstrap-osd' --cap mgr 'allow r'
+      args:
+        creates: /etc/ceph/ceph.client.bootstrap-osd.keyring
+      become: true
+
+    # Re-importing an unchanged key is a no-op, so this is safe every run.
+    - name: Merge admin and bootstrap-osd keys into the mon keyring
+      command: ceph-authtool /etc/ceph/ceph.mon.keyring --import-keyring {{ item }}
+      loop:
+        - /etc/ceph/ceph.client.admin.keyring
+        - /etc/ceph/ceph.client.bootstrap-osd.keyring
+      changed_when: false
+      become: true
+
+    - name: Own the keyrings as ceph
+      file:
+        path: "{{ item }}"
+        owner: ceph
+        group: ceph
+        mode: '0600'
+      loop:
+        - /etc/ceph/ceph.mon.keyring
+        - /etc/ceph/ceph.client.admin.keyring
+        - /etc/ceph/ceph.client.bootstrap-osd.keyring
+      become: true
+
+    # Slurped for distribution to the other mons and the OSD VMs. All four
+    # are text files, so copy-by-content is safe (the binary monmap is NOT
+    # distributed — each mon obtains/builds its own, see the mon play).
+    - name: Read identity files for distribution
+      slurp:
+        src: "{{ item }}"
+      register: ceph_identity
+      loop:
+        - /etc/ceph/ceph.conf
+        - /etc/ceph/ceph.mon.keyring
+        - /etc/ceph/ceph.client.admin.keyring
+        - /etc/ceph/ceph.client.bootstrap-osd.keyring
+      no_log: true
+      become: true
+      tags: always
+
+    - name: Stash identity content for other plays
+      set_fact:
+        ceph_files: >-
+          {{ dict(ceph_identity.results | map(attribute='item')
+                  | zip(ceph_identity.results | map(attribute='content'))) }}
+      no_log: true
+      tags: always
+
+- name: ceph | monitors
+  gather_facts: false
+  hosts: "{{ mon_hosts }}"
+  tags: mon
+
+  vars:
+    mon_id: "{{ inventory_hostname_short }}"
+    mon_dir: "/var/lib/ceph/mon/ceph-{{ inventory_hostname_short }}"
+    ceph_files: "{{ hostvars[ceph_bootstrap_node].ceph_files }}"
+    ceph_mons: "{{ hostvars[ceph_bootstrap_node].ceph_mons }}"
+    ceph_fsid: "{{ hostvars[ceph_bootstrap_node].ceph_fsid }}"
+
+  tasks:
+    # force: false — a node that already has these (hand-built or earlier
+    # run) keeps them. no_log because of the keyring material.
+    - name: Distribute cluster identity files
+      copy:
+        dest: "{{ item.path }}"
+        content: "{{ ceph_files[item.path] | b64decode }}"
+        force: false
+        owner: ceph
+        group: ceph
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /etc/ceph/ceph.conf,                        mode: '0644' }
+        - { path: /etc/ceph/ceph.mon.keyring,                 mode: '0600' }
+        - { path: /etc/ceph/ceph.client.admin.keyring,        mode: '0600' }
+        - { path: /etc/ceph/ceph.client.bootstrap-osd.keyring, mode: '0600' }
+      no_log: true
+      become: true
+
+    - name: Set CEPH_MON_ID
+      lineinfile:
+        path: /etc/default/ceph-mon
+        regexp: '^CEPH_MON_ID='
+        line: CEPH_MON_ID="{{ mon_id }}"
+        create: true
+      become: true
+
+    - name: Check for an existing mon store
+      stat:
+        path: "{{ mon_dir }}/store.db"
+      register: mon_store
+
+    - name: Initialize the monitor
+      when: not mon_store.stat.exists
+      become: true
+      block:
+        # A new mon needs a monmap. If the cluster is already up (we're adding
+        # a mon), fetch the live map — the upstream procedure. On first
+        # formation nothing answers, so every mon builds the identical initial
+        # map locally from the mon list + fsid.
+        - name: Probe for a running cluster
+          command: ceph -s --connect-timeout 10
+          register: cluster_up
+          failed_when: false
+          changed_when: false
+
+        - name: Fetch the live monmap
+          command: ceph mon getmap -o /etc/ceph/monmap.bootstrap
+          when: cluster_up.rc == 0
+
+        - name: Build the initial monmap
+          command: >-
+            monmaptool --create --clobber
+            {% for m in ceph_mons %}--add {{ m.name }} {{ m.address }} {% endfor %}
+            --fsid {{ ceph_fsid }} /etc/ceph/monmap.bootstrap
+          when: cluster_up.rc != 0
+
+        - name: Create the mon data directory
+          file:
+            path: "{{ mon_dir }}"
+            state: directory
+            owner: ceph
+            group: ceph
+
+        - name: Populate the mon store (ceph-mon --mkfs)
+          command: >-
+            ceph-mon --mkfs -i {{ mon_id }}
+            --monmap /etc/ceph/monmap.bootstrap
+            --keyring /etc/ceph/ceph.mon.keyring
+
+        # mkfs ran as root; the daemon runs as ceph. The manual doc resets
+        # ownership the same way after bootstrap.
+        - name: Reset ownership on the ceph state dirs
+          command: chown -R ceph:ceph /var/lib/ceph /var/log/ceph /var/run/ceph
+
+    - name: Make rc.ceph-mon executable
+      file:
+        path: /etc/rc.d/rc.ceph-mon
+        mode: '0755'
+      become: true
+
+    - name: Start the monitor
+      command: /etc/rc.d/rc.ceph-mon start
+      register: mon_start
+      changed_when: "'Starting' in mon_start.stdout"
+      become: true
+
+    - name: Wait for mon quorum
+      command: ceph mon stat
+      register: mon_stat
+      changed_when: false
+      retries: 12
+      delay: 10
+      until: >-
+        'quorum' in mon_stat.stdout and
+        (ceph_mons | map(attribute='name')
+         | reject('in', mon_stat.stdout) | list | length == 0)
+      run_once: true
+      become: true
+
+    # Clears the "monitors have not enabled msgr2" HEALTH_WARN observed in
+    # the manual bring-up. Idempotent.
+    - name: Enable msgr2
+      command: ceph mon enable-msgr2
+      changed_when: false
+      run_once: true
+      become: true
+
+    # The Slackware ceph package installs the RADOS object classes in a
+    # non-default location; OSDs that can't load cls_* fail class ops,
+    # surfacing as mgr errors (devicehealth "disk I/O error" on the first
+    # live cluster). Centralized mon-DB config — set once, before the OSD
+    # play, so OSDs start with the right dir. Running OSDs need a restart
+    # to pick up a change.
+    - name: Get the configured OSD class dir
+      command: ceph config get osd osd_class_dir
+      register: osd_class_dir_now
+      changed_when: false
+      run_once: true
+      become: true
+
+    - name: Set the OSD class dir
+      command: >-
+        ceph config set osd osd_class_dir
+        {{ ceph_osd_class_dir | default('/usr/lib64/rados-classes') }}
+      when: >-
+        (osd_class_dir_now.stdout | trim)
+        != (ceph_osd_class_dir | default('/usr/lib64/rados-classes'))
+      run_once: true
+      become: true
+
+- name: ceph | managers
+  gather_facts: false
+  hosts: "{{ mon_hosts }}"
+  tags: mgr
+
+  vars:
+    mgr_id: "{{ inventory_hostname_short }}"
+    mgr_dir: "/var/lib/ceph/mgr/ceph-{{ inventory_hostname_short }}"
+
+  tasks:
+    - name: Create the mgr data directory
+      file:
+        path: "{{ mgr_dir }}"
+        state: directory
+        owner: ceph
+        group: ceph
+      become: true
+
+    - name: Create the mgr keyring
+      command: >-
+        ceph auth get-or-create mgr.{{ mgr_id }}
+        mon 'allow profile mgr' osd 'allow *' mds 'allow *'
+        -o {{ mgr_dir }}/keyring
+      args:
+        creates: "{{ mgr_dir }}/keyring"
+      become: true
+
+    - name: Own the mgr keyring as ceph
+      file:
+        path: "{{ mgr_dir }}/keyring"
+        owner: ceph
+        group: ceph
+        mode: '0600'
+      become: true
+
+    - name: Set CEPH_MGR_ID
+      lineinfile:
+        path: /etc/default/ceph-mgr
+        regexp: '^CEPH_MGR_ID='
+        line: CEPH_MGR_ID="{{ mgr_id }}"
+        create: true
+      become: true
+
+    - name: Make rc.ceph-mgr executable
+      file:
+        path: /etc/rc.d/rc.ceph-mgr
+        mode: '0755'
+      become: true
+
+    - name: Start the manager
+      command: /etc/rc.d/rc.ceph-mgr start
+      register: mgr_start
+      changed_when: "'Starting' in mgr_start.stdout"
+      become: true
+
+- name: ceph | OSDs (device step destructive, gated)
+  gather_facts: false
+  hosts: "{{ osd_hosts }}"
+  tags: osd
+
+  vars:
+    ceph_files: "{{ hostvars[ceph_bootstrap_node].ceph_files }}"
+
+  tasks:
+    - name: Distribute cluster identity files
+      copy:
+        dest: "{{ item.path }}"
+        content: "{{ ceph_files[item.path] | b64decode }}"
+        force: false
+        owner: ceph
+        group: ceph
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /etc/ceph/ceph.conf,                         mode: '0644' }
+        - { path: /etc/ceph/ceph.client.bootstrap-osd.keyring, mode: '0600' }
+      no_log: true
+      become: true
+
+    - name: Look for an existing OSD on this host
+      find:
+        paths: /var/lib/ceph/osd
+        file_type: directory
+        patterns: 'ceph-*'
+      register: osd_dirs
+      become: true
+
+    - name: Note that OSD creation is gated
+      debug:
+        msg: >-
+          Skipping OSD creation —
+          confirm_osd_create='{{ confirm_osd_create | default('no') }}' but it
+          must be the literal string "yes" (true does not pass). Confirming
+          consumes {{ osd_device | default('<osd_device unset>') }} on this host.
+      when:
+        - confirm_osd_create | default('no') != 'yes'
+        - osd_dirs.files | length == 0
+
+    - name: Create the OSD
+      when:
+        - confirm_osd_create | default('no') == 'yes'
+        - osd_dirs.files | length == 0
+      become: true
+      block:
+        - name: Require an OSD device
+          assert:
+            that:
+              - osd_device is defined
+            fail_msg: >-
+              Set osd_device per host — virtio attachment: /dev/sdb-style;
+              NVMe passthrough: /dev/nvme0n1.
+
+        # Read-only check: fails if the device is missing; any output means an
+        # existing signature. A passed-through disk carrying old data must be
+        # wiped deliberately by hand (wipefs -a / zpool labelclear), never by
+        # this play.
+        - name: Verify the OSD device exists and carries no signatures
+          command: wipefs -n {{ osd_device }}
+          register: wipefs_check
+          changed_when: false
+          failed_when: wipefs_check.rc != 0 or (wipefs_check.stdout | trim) != ''
+
+        - name: Generate the OSD uuid
+          command: uuidgen
+          register: osd_uuid
+
+        - name: Generate the OSD cephx secret
+          command: ceph-authtool --gen-print-key
+          register: osd_secret
+          no_log: true
+
+        # no_log: the secret is on the command line. The registered stdout is
+        # the new OSD's numeric id.
+        - name: Register the OSD with the cluster
+          shell: >-
+            echo '{"cephx_secret": "{{ osd_secret.stdout | trim }}"}' |
+            ceph osd new {{ osd_uuid.stdout | trim }} -i -
+            -n client.bootstrap-osd
+            -k /etc/ceph/ceph.client.bootstrap-osd.keyring
+          register: osd_new
+          no_log: true
+
+        - name: Set the OSD id
+          set_fact:
+            osd_id: "{{ osd_new.stdout | trim }}"
+
+        # The data dir lives on the VM's root disk — it only holds the
+        # keyring and BlueStore metadata; the data goes to the raw device
+        # via the block symlink below.
+        - name: Create the OSD data directory
+          file:
+            path: /var/lib/ceph/osd/ceph-{{ osd_id }}
+            state: directory
+
+        - name: Point BlueStore at the raw device
+          file:
+            src: "{{ osd_device }}"
+            dest: /var/lib/ceph/osd/ceph-{{ osd_id }}/block
+            state: link
+
+        # The daemon runs --setuser ceph and must open the device directly.
+        # chown covers this boot; the udev rule re-applies it on every boot
+        # (device nodes are recreated by devtmpfs/eudev).
+        - name: Grant the ceph user the OSD device (now)
+          command: chown ceph:ceph {{ osd_device }}
+
+        - name: Grant the ceph user the OSD device (at boot)
+          copy:
+            dest: /etc/udev/rules.d/90-ceph-osd.rules
+            owner: root
+            group: root
+            mode: '0644'
+            content: |
+              # Installed by ceph-cluster-init.yaml — OSD block device
+              # ownership for the ceph user. Regenerate (re-run the
+              # playbook) if the device attachment/name changes.
+              KERNEL=="{{ osd_device | basename }}", OWNER="ceph", GROUP="ceph", MODE="0660"
+
+        - name: Write the OSD keyring
+          command: >-
+            ceph-authtool --create-keyring
+            /var/lib/ceph/osd/ceph-{{ osd_id }}/keyring
+            --name osd.{{ osd_id }} --add-key {{ osd_secret.stdout | trim }}
+          no_log: true
+
+        - name: Initialize the OSD store (ceph-osd --mkfs)
+          command: >-
+            ceph-osd -i {{ osd_id }} --mkfs
+            --osd-uuid {{ osd_uuid.stdout | trim }}
+
+        - name: Reset ownership on the ceph state dirs
+          command: chown -R ceph:ceph /var/lib/ceph /var/log/ceph /var/run/ceph
+
+    # Re-run / adopted-OSD path: recover the id from the existing data dir.
+    - name: Determine the OSD id from the existing data dir
+      set_fact:
+        osd_id: "{{ osd_dirs.files[0].path | basename | regex_replace('^ceph-', '') }}"
+      when: osd_dirs.files | length > 0
+
+    - name: Configure and start the OSD service
+      when: osd_id is defined
+      become: true
+      block:
+        - name: Set CEPH_OSD_ID
+          lineinfile:
+            path: /etc/default/ceph-osd
+            regexp: '^CEPH_OSD_ID='
+            line: CEPH_OSD_ID="{{ osd_id }}"
+            create: true
+
+        - name: Make rc.ceph-osd executable
+          file:
+            path: /etc/rc.d/rc.ceph-osd
+            mode: '0755'
+
+        - name: Start the OSD
+          command: /etc/rc.d/rc.ceph-osd start
+          register: osd_start
+          changed_when: "'Starting' in osd_start.stdout"
+
+- name: ceph | verify cluster health
+  gather_facts: false
+  hosts: "{{ ceph_bootstrap_node }}"
+  tags: verify
+
+  vars:
+    expected_osds: "{{ query('inventory_hostnames', osd_hosts) | length }}"
+
+  tasks:
+    - name: Wait for all OSDs to come up
+      command: ceph osd stat
+      register: osd_stat
+      changed_when: false
+      retries: 12
+      delay: 10
+      until: >-
+        (expected_osds ~ ' osds: ' ~ expected_osds ~ ' up') in osd_stat.stdout
+      when: confirm_osd_create | default('no') == 'yes'
+      become: true
+
+    - name: Get cluster status
+      command: ceph -s
+      register: ceph_status
+      changed_when: false
+      become: true
+
+    - name: Show cluster status
+      debug:
+        var: ceph_status.stdout_lines
