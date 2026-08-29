@@ -13,7 +13,7 @@
       - drbd-utils-9.34.0-x86_64-1_SBo
       - zfs-2.4.3-x86_64-1_SBo
     support_packages:
-      - temurin-jdk21-21.0.12+8-x86_64-1_SBo
+      - temurin-jdk21-21.0.12.1+1-x86_64-1_SBo
   
   tasks:
     - name: DEBUG package list
