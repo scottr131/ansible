@@ -1,0 +1,26 @@
+# Network configuration for Slackware 15+
+# For Incus/LINSTOR/OVN cluster — 2×1GbE LACP bond + VLAN design
+# Config for OSD node
+# Managed by Ansible (cluster-net-osd.yaml)
+#
+# Per-node variables (set in host_vars/<host>/network.yaml):
+#   cluster_gateway   default gateway (shared across nodes)
+#   cluster_ip        eth0 IP in CIDR notation, e.g. 10.168.1.47/24
+#   storage_ip        eth1 IP in CIDR notation, e.g. 192.168.130.41/24
+
+MAXNICS="10"
+GATEWAY="{{ cluster_gateway }}"
+
+# eth0: management LAN and Incus cluster traffic
+IFNAME[0]="eth0"
+IPADDRS[0]="{{ cluster_ip }}"
+
+# eth1: Storage / LINSTOR traffic (VLAN 130)
+IFNAME[1]="eth1"
+IPADDRS[1]="{{ storage_ip }}"
+# DO NOT enable until the host side is jumbo end-to-end: the Incus NIC
+# device needs mtu=9000 (sets the host tap) and br-storage must be 9000.
+# A 9000 guest behind a 1500 tap BLACKHOLES large frames (worse than plain
+# 1500 — TCP stalls instead of negotiating down). See TODO.md (jumbo for
+# OSD VMs). Once the host side is done, uncomment and re-deploy:
+#MTU[1]="9000"
