@@ -1,0 +1,293 @@
+---
+
+# linstor-cluster-init.yaml — form a LINSTOR cluster and wire it into Incus.
+#
+# This playbook created with Anthropic Fable
+#
+# Run linstor-on-slackware.yaml first: it installs the packages and the
+# rc.linstor-* files this playbook enables and starts. This playbook is the
+# automated version of the manual process in intake/linstor-setup.md and is
+# safe to re-run; every step checks current state before acting.
+#
+# Variables (set as Semaphore extra vars unless noted):
+#   target_hosts            Required. Host pattern for the cluster nodes,
+#                           e.g. "clusternode". All become satellites.
+#   linstor_controller_node Inventory name of the controller (registered as a
+#                           combined node). Default: node1. Must match a host
+#                           in target_hosts.
+#   linstor_device          Required for the device-pool step. Empty disk or
+#                           partition consumed on every node, e.g.
+#                           /dev/nvme0n1p3. Group var is fine (identical nodes).
+#   confirm_device_pool     Must be the string "yes" to run the destructive
+#                           device-pool creation. Default: skip that step.
+#   linstor_node_suffix     Appended to inventory names to form the LINSTOR
+#                           node name, e.g. ".example.net". Default: "". The
+#                           LINSTOR node name must match the Incus cluster
+#                           member name.
+#   linstor_node_address    Per-host override for the registration address.
+#                           Default: storage_ip (without the CIDR suffix),
+#                           falling back to ansible_host.
+#   linstor_storage_pool    LINSTOR storage pool name. Default: linstor-pool.
+#   zfs_pool_name           Local ZFS pool name on each node. Default: zfs-pool.
+#   incus_pool_name         Incus storage pool name. Default: incus-pool.
+#   configure_incus         Set false to skip the Incus wiring play.
+#   linstor_controller_url  Override the controller_connection URL given to
+#                           Incus. Default: http://<controller address>:3370.
+#
+# Tags: satellite, controller, device-pool, incus — for partial re-runs once
+# the cluster has been formed at least once.
+
+- name: linstor | enable and start satellites
+  gather_facts: false
+  hosts: "{{ target_hosts }}"
+  tags: satellite
+
+  tasks:
+    - name: Make rc.linstor-satellite executable
+      file:
+        path: /etc/rc.d/rc.linstor-satellite
+        mode: '0755'
+      become: true
+
+    - name: Start the LINSTOR satellite
+      command: /etc/rc.d/rc.linstor-satellite start
+      register: satellite_start
+      changed_when: "'Starting' in satellite_start.stdout"
+      become: true
+
+    # JVM startup takes a moment; errors land in /var/log/linstor/satellite
+    - name: Wait for the satellite to listen on 3366
+      wait_for:
+        port: 3366
+        timeout: 120
+
+- name: linstor | start controller and register nodes
+  gather_facts: false
+  hosts: "{{ linstor_controller_node | default('node1') }}"
+  tags: controller
+
+  vars:
+    linstor_storage_pool: linstor-pool
+    zfs_pool_name: zfs-pool
+
+  tasks:
+    - name: Make rc.linstor-controller executable
+      file:
+        path: /etc/rc.d/rc.linstor-controller
+        mode: '0755'
+      become: true
+
+    - name: Start the LINSTOR controller
+      command: /etc/rc.d/rc.linstor-controller start
+      register: controller_start
+      changed_when: "'Starting' in controller_start.stdout"
+      become: true
+
+    # Errors here usually mean Python or python_linstor problems;
+    # see /var/log/linstor/controller
+    - name: Wait for the controller REST API on 3370
+      wait_for:
+        port: 3370
+        timeout: 120
+
+    # One entry per cluster node: inventory name, LINSTOR/Incus node name,
+    # and the address to register (storage VLAN). Later plays reuse this.
+    - name: Build the node registration list
+      set_fact:
+        linstor_nodes: >-
+          {{ linstor_nodes | default([]) + [ {
+               'inventory': item,
+               'name': hostvars[item].linstor_node_name
+                       | default(item ~ (linstor_node_suffix | default(''))),
+               'address': hostvars[item].linstor_node_address
+                          | default((hostvars[item].storage_ip
+                                     | default(hostvars[item].ansible_host
+                                     | default(item))).split('/') | first)
+             } ] }}
+      loop: "{{ query('inventory_hostnames', target_hosts) }}"
+      tags: always
+
+    - name: Get currently registered nodes
+      command: linstor node list -p
+      register: current_nodes
+      changed_when: false
+      become: true
+
+    - name: Register nodes with the controller
+      command: >-
+        linstor node create {{ item.name }} {{ item.address }}
+        --node-type {{ 'combined' if item.inventory == (linstor_controller_node | default('node1'))
+                       else 'satellite' }}
+      when: ('| ' ~ item.name ~ ' ') not in current_nodes.stdout
+      loop: "{{ linstor_nodes }}"
+      become: true
+
+    - name: Wait for the nodes to come online
+      command: linstor node list -p
+      register: node_status
+      changed_when: false
+      retries: 12
+      delay: 10
+      until: >-
+        node_status.stdout_lines | select('search', 'Online') | list | length
+        >= linstor_nodes | length
+      become: true
+
+    - name: Assert every node is registered and Online
+      assert:
+        that:
+          - >-
+            node_status.stdout_lines
+            | select('search', '\| ' ~ (item.name | regex_escape) ~ ' .*Online')
+            | list | length == 1
+        fail_msg: >-
+          {{ item.name }} is not Online — fix or remove it
+          (linstor node delete {{ item.name }}) before continuing.
+      loop: "{{ linstor_nodes }}"
+
+- name: linstor | create the device pool (destructive, gated)
+  gather_facts: false
+  hosts: "{{ linstor_controller_node | default('node1') }}"
+  tags: device-pool
+
+  vars:
+    linstor_storage_pool: linstor-pool
+    zfs_pool_name: zfs-pool
+
+  tasks:
+    - name: Note that the device-pool step is gated
+      debug:
+        msg: >-
+          Skipping device pool creation — set confirm_device_pool=yes
+          (and linstor_device) to consume {{ linstor_device | default('the OSD device') }}
+          on each node.
+      when: confirm_device_pool | default('no') != 'yes'
+
+    - name: Create the device pool
+      when: confirm_device_pool | default('no') == 'yes'
+      block:
+        - name: Require a device path
+          assert:
+            that:
+              - linstor_device is defined
+            fail_msg: Set linstor_device (e.g. /dev/nvme0n1p3) before confirming.
+
+        - name: Get current storage pools
+          command: linstor storage-pool list -p
+          register: sp_list
+          changed_when: false
+          become: true
+
+        - name: Determine which nodes still need the storage pool
+          set_fact:
+            pool_missing_nodes: >-
+              {{ linstor_nodes
+                 | rejectattr('name', 'in',
+                              sp_list.stdout_lines
+                              | select('search', linstor_storage_pool)
+                              | join(' '))
+                 | list }}
+
+        # wipefs -n is read-only: fails if the device is missing, and any
+        # output means an existing filesystem/ZFS/RAID signature — refuse
+        # rather than let create-device-pool consume a non-empty device.
+        - name: Verify the device exists and carries no signatures
+          command: wipefs -n {{ linstor_device }}
+          register: wipefs_check
+          changed_when: false
+          failed_when: wipefs_check.rc != 0 or (wipefs_check.stdout | trim) != ''
+          # default() guards the empty-loop case (all pools already exist):
+          # Ansible templates delegate_to even when the loop has no items, and
+          # a bare item.inventory is then a fatal undefined (ansible/ansible#43449).
+          delegate_to: "{{ item.inventory | default(inventory_hostname) }}"
+          loop: "{{ pool_missing_nodes }}"
+          become: true
+
+        - name: Create the ZFS-thin device pool on each node
+          command: >-
+            linstor physical-storage create-device-pool
+            --pool-name {{ zfs_pool_name }}
+            --storage-pool {{ linstor_storage_pool }}
+            zfsthin {{ item.name }} {{ linstor_device }}
+          loop: "{{ pool_missing_nodes }}"
+          become: true
+
+        - name: Verify the storage pool is present on every node
+          command: linstor storage-pool list -p
+          register: sp_status
+          changed_when: false
+          retries: 6
+          delay: 10
+          until: >-
+            linstor_nodes | map(attribute='name')
+            | reject('in', sp_status.stdout_lines
+                           | select('search', linstor_storage_pool)
+                           | join(' '))
+            | list | length == 0
+          become: true
+
+- name: incus | connect the cluster to LINSTOR
+  gather_facts: false
+  hosts: "{{ linstor_controller_node | default('node1') }}"
+  tags: incus
+
+  vars:
+    linstor_storage_pool: linstor-pool
+    incus_pool_name: incus-pool
+    controller_address: >-
+      {{ (linstor_nodes
+          | selectattr('inventory', 'equalto', linstor_controller_node | default('node1'))
+          | first).address }}
+    controller_url: "{{ linstor_controller_url | default('http://' ~ controller_address ~ ':3370', true) }}"
+
+  tasks:
+    - name: Wire LINSTOR into Incus
+      when: configure_incus | default(true) | bool
+      block:
+        - name: Get the current controller connection setting
+          command: incus config get storage.linstor.controller_connection
+          register: incus_ctrl_conn
+          changed_when: false
+          become: true
+
+        - name: Point Incus at the LINSTOR controller
+          command: >-
+            incus config set
+            storage.linstor.controller_connection={{ controller_url }}
+          when: (incus_ctrl_conn.stdout | trim) != controller_url
+          become: true
+
+        - name: Get existing Incus storage pools
+          command: incus storage list -f csv
+          register: incus_pools
+          changed_when: false
+          become: true
+
+        - name: Create the Incus storage pool
+          when: >-
+            incus_pools.stdout_lines
+            | select('match', '^' ~ (incus_pool_name | regex_escape) ~ ',')
+            | list | length == 0
+          block:
+            - name: Stage the pool on each cluster member
+              command: >-
+                incus storage create {{ incus_pool_name }} linstor
+                --target {{ item.name }}
+              loop: "{{ linstor_nodes }}"
+              become: true
+
+            - name: Finalize the pool against the LINSTOR storage pool
+              command: >-
+                incus storage create {{ incus_pool_name }} linstor
+                linstor.resource_group.storage_pool={{ linstor_storage_pool }}
+              become: true
+
+        - name: Get the LINSTOR resource groups
+          command: linstor resource-group list -p
+          register: rg_list
+          changed_when: false
+          become: true
+
+        - name: Show the resource groups
+          debug:
+            var: rg_list.stdout_lines
