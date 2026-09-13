@@ -2,7 +2,7 @@
 
 - name: slackware ovn install playbook
   gather_facts: false
-  hosts: clusternode
+  hosts: "{{ target_hosts }}"
 
   vars:
     ovn_packages: 
