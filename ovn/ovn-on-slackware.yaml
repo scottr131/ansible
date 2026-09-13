@@ -6,8 +6,8 @@
 
   vars:
     ovn_packages: 
-      - openvswitch-3.6.3-x86_64-1_SBo
-      - ovn-25.09.2-x86_64-1_SBo
+      - openvswitch-3.7.1-x86_64-1_SBo
+      - ovn-26.03.2-x86_64-1_SBo
 
   tasks:
     - name: DEBUG package list
