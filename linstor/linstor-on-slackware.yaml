@@ -6,12 +6,12 @@
 
   vars:
     linstor_packages: 
-      - linstor-server-1.34.2-x86_64-1_SBo
-      - linstor_client-1.28.1-x86_64-1_SBo
-      - python_linstor-1.28.2-x86_64-1_SBo
+      - linstor-server-1.35.0-x86_64-1_SBo
+      - linstor_client-1.29.1-x86_64-1_SBo
+      - python_linstor-1.29.1-x86_64-1_SBo
       - drbd-9.3.3-x86_64-1_SBo
       - drbd-utils-9.34.0-x86_64-1_SBo
-      - zfs-2.4.3-x86_64-1_SBo
+      - zfs-2.4.4-x86_64-1_SBo
     support_packages:
       - temurin-jdk21-21.0.12.1+1-x86_64-1_SBo
   
